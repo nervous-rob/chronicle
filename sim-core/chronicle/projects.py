@@ -44,7 +44,11 @@ class Projects:
         """Only disclose projects a person can begin/continue from their exact place."""
         e=self.e
         if p.place < 0 or p.place not in e.places or e.places[p.place].destroyed_day is not None: return []
-        owner=self._owner(p); cell=p.cell; terrain=e.world.terrain[cell]
+        owner=self._owner(p)
+        # v1 projects require control of the exact work place.  Permission/contract
+        # work is a later social layer; strangers cannot silently claim a host's site.
+        if e.places[p.place].owner != owner: return []
+        cell=p.cell; terrain=e.world.terrain[cell]
         out=[]
         active=[q for q in self.projects.values() if q.cell==cell and q.place==p.place and q.owner==owner]
         for q in sorted(active,key=lambda q:q.id):
@@ -64,7 +68,7 @@ class Projects:
             if terrain not in [e.world.T[t] if hasattr(e.world,'T') else None for t in []]: pass
             from .world import T
             if int(terrain) not in [T[t] for t in spec['terrain_allow']]: continue
-            if spec['requires'] or any(b.cell==cell and b.kind==kind and b.destroyed_day is None for b in e.places.values()): continue
+            if spec['requires'] or any(b.id==p.place and b.kind==kind and b.destroyed_day is None for b in e.places.values()): continue
             out.append({'kind':'build','building':kind,'materials':spec['materials']})
         return out
 
@@ -83,6 +87,8 @@ class Projects:
         e=self.e; owner=self._owner(p); kind=a.get('project')
         if kind not in ('clear','extract','build','repair'): raise ValueError('unknown_project_kind')
         if p.place<0: raise ValueError('project_requires_place')
+        if p.place not in e.places or e.places[p.place].destroyed_day is not None or e.places[p.place].owner != owner:
+            raise ValueError('project_requires_controlled_place')
         building=a.get('building'); target=a.get('target_place')
         if kind=='clear': need={}; hours=e.cfg['projects']['clear_labor_hours']; building=None; target=None
         elif kind=='extract':
@@ -98,7 +104,7 @@ class Projects:
             if not isinstance(building,str) or building not in e.cfg.catalog['buildings']: raise ValueError('invalid_building')
             spec=e.cfg.building(building); from .world import T
             if int(e.world.terrain[p.cell]) not in [T[t] for t in spec['terrain_allow']] or spec['requires']: raise ValueError('site_not_supported')
-            if kind=='build' and any(b.cell==p.cell and b.kind==building and b.destroyed_day is None for b in e.places.values()): raise ValueError('building_already_present')
+            if kind=='build' and any(b.id==p.place and b.kind==building and b.destroyed_day is None for b in e.places.values()): raise ValueError('building_already_present')
             need=dict(spec['materials']); hours=float(spec['labor_days'])*e.cfg['agriculture']['activity_hours_per_day']
         q=Project(self.next_id,kind,p.cell,p.place,owner,building,target,0.,hours,self._reserve(p,owner,need),{},e.day)
         self.projects[q.id]=q; self.next_id+=1
