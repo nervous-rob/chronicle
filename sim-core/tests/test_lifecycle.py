@@ -54,6 +54,22 @@ S.step();check(not Sa.alive and S.farming.assignments.get(Sb.id)==Sf,'death hand
 N,Na,Nb,Nf=fixture({'demography.enabled':False})
 Na.starvation=2*float(N.cfg['needs']['starve_days'])
 N.step();check(not Na.alive and N.farming.assignments.get(Nb.id)==Nf,'physiology death also hands farm routine to a household survivor')
+# Estate succession follows designated heir before spouse, transfers all household ownership while
+# leaving goods physically where they were, and lets the heir retain the farm routine.
+I,Ia,Ib,If=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
+ 'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
+heir=I.add_person(-25*365,Ia.cell,Ia.place,household_id=0,name='Cara',sex='female',role='farmer')
+Ia.born_day=-60*365; Ia.designated_heir=heir.id; Ia.estate_owner=True
+I.step()
+owned_lots=[l for l in I.inventory.lots.values() if l.owner==f'p:{heir.id}']
+check(not Ia.alive and I.places[Ia.home_place].owner==f'p:{heir.id}' and I.farming.farms[If].owner==f'p:{heir.id}' and owned_lots and any(l.holder==f'b:{I.farming.farms[If].store}' for l in owned_lots) and all(l.holder in {f'b:{I.farming.farms[If].store}',f'b:{I.farming.farms[If].home}'} for l in owned_lots) and I.farming.assignments.get(heir.id)==If,'designated heir receives estate, preserves custody, and can continue farm work')
+check(any(x.type=='transfer' and x.payload.get('estate') and x.payload.get('owner_to')==f'p:{heir.id}' for x in I.ledger.events),'estate succession is publicly ledgered')
+# With no qualifying relation, the estate is explicitly unowned rather than permanently dead-owned.
+U,Ua,Ub,Uf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
+ 'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
+Ua.born_day=-60*365; Ua.spouse=Ub.spouse=None; Ua.estate_owner=True
+U.step()
+check(U.places[Ua.home_place].owner is None and all(l.owner is None for l in U.inventory.lots.values()),'estate without heir becomes unowned')
 # checkpoint preserves a newly born child and family links.
 C,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
 C.step()

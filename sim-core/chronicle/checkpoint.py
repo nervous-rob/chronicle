@@ -268,7 +268,7 @@ def validate(e):
         require(p.place==-1 or (p.place in e.places and e.places[p.place].cell==p.cell),'person location mismatch')
         require(p.home_place==-1 or p.home_place in e.places,'missing home')
         require(type(p.capabilities) is set and type(p.traits) is tuple,'person collection types changed')
-        require(p.sex in ('unspecified','female','male') and (p.spouse is None or p.spouse in e.people.rows) and all(parent in e.people.rows for parent in p.parents) and all(child in e.people.rows for child in p.children),'invalid family references')
+        require(p.sex in ('unspecified','female','male') and (p.spouse is None or p.spouse in e.people.rows) and (p.designated_heir is None or p.designated_heir in e.people.rows) and type(p.estate_owner) is bool and all(parent in e.people.rows for parent in p.parents) and all(child in e.people.rows for child in p.children),'invalid family references')
         require(p.last_day<e.day and (not p.alive or p.last_day==e.day-1),'person daily marker mismatch')
         require(all(type(k) is int and 0<=k<len(e.ledger.events) and type(m) is dict and set(m)=={'day','fidelity','source','hops','from'} and type(m['hops']) is int and m['hops']>=0 and (m['from'] is None or m['from'] in e.people.rows) and (m['hops']==0)==(m['from'] is None) for k,m in p.memory.items()),'invalid memory record')
         require(type(p.last_sleep_quality) is float and 0.<=p.last_sleep_quality<=1.,'invalid sleep quality')

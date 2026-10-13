@@ -27,7 +27,6 @@ PENDING={
  'loans':'credit not implemented',
  'hire':'wage labor not implemented',
  'justice':'courts not implemented',
- 'succession':'inheritance not implemented',
  'polity':'claims/taxes not implemented',
  'localities':'settlement lifecycle not implemented',
  'chroniclers':'chronicler cadence consumers (increment F) not implemented',

@@ -33,6 +33,8 @@ class Person:
     parents: list = field(default_factory=list)
     spouse: int | None = None
     children: list = field(default_factory=list)
+    designated_heir: int | None = None
+    estate_owner: bool = False  # seeded household head; its household estate follows personal succession
     capabilities: set = field(default_factory=set)
     learning: dict = field(default_factory=dict)
     traits: tuple = ()
@@ -65,18 +67,22 @@ class People:
         self._teaching_day = -1
 
     def add(self, born_day, cell, place=-1, *, day=0, household_id=None, name=None,
-            role=None, capabilities=(), traits=(), sex='unspecified', parents=(), emit_birth=False):
+            role=None, capabilities=(), traits=(), sex='unspecified', parents=(), emit_birth=False,
+            designated_heir=None, estate_owner=False):
         if type(born_day) is not int or born_day > day or type(cell) is not int or cell < 0:
             raise PeopleError('invalid birth day or cell')
         if role is not None and role not in self.cfg.catalog['roles']: raise PeopleError('unknown role')
         if sex not in ('unspecified', 'female', 'male'): raise PeopleError('invalid sex')
         if any(type(pid) is not int or pid not in self.rows for pid in parents): raise PeopleError('unknown parent')
         if emit_birth and born_day != day: raise PeopleError('born event must be on actual birth day')
+        if designated_heir is not None and (type(designated_heir) is not int or designated_heir not in self.rows):
+            raise PeopleError('unknown designated heir')
         known = set(self.cfg['capabilities']) - {'teach_weight'}
         if not set(capabilities) <= known: raise PeopleError('unknown capability')
         pid = len(self.rows)
         p = Person(pid, born_day, cell, place, sex=sex, household_id=household_id, home_place=place,
-                   name=name, role=role, role_since_day=day, parents=list(parents), capabilities=set(capabilities), traits=tuple(traits))
+                   name=name, role=role, role_since_day=day, parents=list(parents), designated_heir=designated_heir,
+                   estate_owner=bool(estate_owner), capabilities=set(capabilities), traits=tuple(traits))
         p.stage_seen = self.stage(p, day)
         if role is not None and not self.at_least(p, day, 'youth'):
             raise PeopleError('too young for a role')

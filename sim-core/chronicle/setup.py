@@ -182,7 +182,7 @@ def generate(e):
         # add people
         pids = []
         for q in people:
-            p = e.add_person(q['born'], cell, home, household_id=hid, name=q['name'], role=q['role'], capabilities=q['caps'], sex=q['sex'])
+            p = e.add_person(q['born'], cell, home, household_id=hid, name=q['name'], role=q['role'], capabilities=q['caps'], sex=q['sex'], estate_owner=(len(pids) == 0))
             pids.append(p.id)
             if q['role']: report['roles'][q['role']] = report['roles'].get(q['role'], 0) + 1
             for c in q['caps']: report['capabilities'][c] = report['capabilities'].get(c, 0) + 1

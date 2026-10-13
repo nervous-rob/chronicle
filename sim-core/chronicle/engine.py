@@ -279,26 +279,78 @@ class Engine:
                 self.ledger.event(d, 'arrived', [p.id], cell=anchor.cell, place=p.place, source='scenario')
             ev(d, 'scenario', visibility='private', kind='stranger', arrived=int(st['count']))
 
+    def _heir(self, dead):
+        """Deterministic personal succession: named heir, spouse, eldest child, then kin.
+        This deliberately chooses a living person rather than silently retaining a dead owner key.
+        """
+        if self.cfg['succession']['rule'] == 'none': return None
+        people = self.people.rows
+        def alive(pid):
+            q = people.get(pid)
+            return q if q is not None and q.alive else None
+        named = alive(dead.designated_heir) if dead.designated_heir is not None else None
+        if named is not None: return named
+        spouse = alive(dead.spouse) if dead.spouse is not None else None
+        if spouse is not None: return spouse
+        children = [people[pid] for pid in dead.children if alive(pid) is not None]
+        if children: return min(children, key=lambda q: (q.born_day, q.id))
+        kin_ids = set(dead.parents)
+        for parent_id in dead.parents:
+            parent = people.get(parent_id)
+            if parent: kin_ids.update(parent.children)
+        kin_ids.discard(dead.id)
+        kin = [people[pid] for pid in kin_ids if alive(pid) is not None]
+        return min(kin, key=lambda q: (q.born_day, q.id)) if kin else None
+
+    def _transfer_estate(self, day, dead):
+        """Transfer a dead person's own estate, and a seeded household estate when they head it.
+        Ownership changes but custody does not: stock stays in its real physical holder.
+        """
+        heir = self._heir(dead)
+        target = f'p:{heir.id}' if heir is not None else None
+        owner_keys = {f'p:{dead.id}'}
+        if dead.estate_owner and dead.household_id is not None: owner_keys.add(f'h:{dead.household_id}')
+        lots = [lot for lot in self.inventory.lots.values() if lot.owner in owner_keys]
+        places = [place for place in self.places.values() if place.owner in owner_keys]
+        if not lots and not places: return heir
+        # Inventory.transfer is the single ownership primitive. Same-holder legs preserve
+        # physical custody while ledgering each inherited (or abandoned) lot atomically.
+        from .inventory import Leg
+        if lots:
+            self.inventory.transfer(day, [Leg(lot.id, lot.qty, lot.holder, target) for lot in lots],
+                                    actors=[dead.id] + ([heir.id] if heir else []), cell=dead.cell, place=dead.place,
+                                    reason='inheritance' if heir else 'estate_abandoned')
+        for place in places: place.owner = target
+        for farm in self.farming.farms.values():
+            if farm.owner in owner_keys: farm.owner = target
+        for household in self.farming.households.values():
+            if household.owner in owner_keys: household.owner = target
+        self.ledger.event(day, 'transfer', [dead.id] + ([heir.id] if heir else []), cell=dead.cell, place=dead.place,
+                          reason='inheritance' if heir else 'estate_abandoned', estate=True,
+                          owner_from=sorted(owner_keys), owner_to=target, places=[place.id for place in places])
+        return heir
+
     def _succession(self, day, dead_ids):
-        """Keep existing household routines alive when their assigned adult dies.
-        This is narrow succession, not estates/titles: the household and physical owner remain,
-        and only an already-qualified co-resident adult may take a routine assignment."""
+        """Settle ownership before replacing farm/pantry routines after a death."""
         for pid in dead_ids:
+            p = self.people.rows[pid]
+            heir = self._transfer_estate(day, p)
             farm = self.farming.assignments.pop(pid, None)
             home = self.farming.keepers.pop(pid, None)
-            p = self.people.rows[pid]
             if farm is not None:
                 candidates = [q for q in self.people.rows.values() if q.alive and q.household_id == p.household_id and q.home_place == p.home_place
                               and q.role and self.people.can_use_role(q, q.role, day)]
                 f = self.farming.farms[farm]
-                candidates = [q for q in candidates if self.cfg.role(q.role)['workplace'] == self.places[farm].kind
+                candidates = [q for q in candidates if f.owner in self.people.owners(q)
+                              and self.cfg.role(q.role)['workplace'] == self.places[farm].kind
                               and self.cells.crop['item'] in self.cfg.role(q.role)['produces']]
                 if candidates:
-                    heir = min(candidates, key=lambda q:q.id); self.farming.assignments[heir.id] = farm
-                    self.ledger.event(day, 'role_changed', [heir.id, pid], cell=heir.cell, place=heir.place, role=heir.role, succession=True)
+                    successor = heir if heir in candidates else min(candidates, key=lambda q:q.id)
+                    self.farming.assignments[successor.id] = farm
+                    self.ledger.event(day, 'role_changed', [successor.id, pid], cell=successor.cell, place=successor.place, role=successor.role, succession=True)
             if home is not None and home in self.farming.households:
                 candidates = [q for q in self.people.rows.values() if q.alive and q.household_id == p.household_id and q.home_place == p.home_place
-                              and self.people.at_least(q, day, 'youth')]
+                              and self.people.at_least(q, day, 'youth') and self.farming.households[home].owner in self.people.owners(q)]
                 if candidates: self.farming.keepers[min(candidates,key=lambda q:q.id).id] = home
 
     def _step(self):
