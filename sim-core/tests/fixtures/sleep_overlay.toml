@@ -1,0 +1,22 @@
+# Theme overlay used by tests/test_sleep.py: a new sleeping place and a new rest consequence with zero Python changes.
+schema_version = 2
+[catalog.buildings.barn]
+terrain_allow = ["plains","forest","hills"]
+requires = []
+store = 300.0
+shelter = 3
+confine_cap = 0
+spoil_mult = 1.0
+affordances = ["store","hayloft"]
+labor_days = 30.0
+materials = { timber = 3 }
+decay_per_day = 0.0001
+value = 20.0
+[sleep.access.hayloft]
+priority = 35
+relation = "any"
+affordance = "hayloft"
+quality = 0.7
+[sleep.consequences.stiff]
+quality_below = 0.75
+hours_mult = 0.9

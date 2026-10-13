@@ -1,0 +1,20 @@
+# Python bytecode and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Test output and generated simulation data
+sim-core/test-results/
+sim-core/runs/
+sim-core/checkpoints/*.zip
+*.log
+
+# Local scratch, archives, and OS/editor files
+scratch/
+*.zip
+*.zip.sha256
+.last_*
+.DS_Store
+.vscode/
+.idea/

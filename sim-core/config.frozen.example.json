@@ -1,0 +1,1881 @@
+{
+ "catalog": {
+  "buildings": {
+   "bridge": {
+    "affordances": [
+     "enable:cross_river"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0002,
+    "labor_days": 150.0,
+    "materials": {
+     "stone": 10,
+     "timber": 10
+    },
+    "requires": [
+     "river"
+    ],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 0.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 150.0
+   },
+   "farm": {
+    "affordances": [
+     "workplace",
+     "field"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 20.0,
+    "materials": {},
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 100.0,
+    "terrain_allow": [
+     "plains",
+     "forest"
+    ],
+    "value": 20.0
+   },
+   "fence": {
+    "affordances": [
+     "protection"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0005,
+    "labor_days": 15.0,
+    "materials": {
+     "timber": 3
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 0.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 10.0
+   },
+   "ferry": {
+    "affordances": [
+     "enable:cross_water"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0003,
+    "labor_days": 40.0,
+    "materials": {
+     "timber": 6
+    },
+    "requires": [
+     "water_adjacent"
+    ],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 0.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 40.0
+   },
+   "fishery": {
+    "affordances": [
+     "workplace"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0002,
+    "labor_days": 20.0,
+    "materials": {
+     "timber": 2
+    },
+    "requires": [
+     "water_adjacent"
+    ],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 50.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 20.0
+   },
+   "granary": {
+    "affordances": [
+     "store"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 60.0,
+    "materials": {
+     "timber": 6
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 0.5,
+    "store": 2000.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 50.0
+   },
+   "hall": {
+    "affordances": [
+     "workplace",
+     "enable:judge",
+     "enable:collect_tax",
+     "enable:gathering"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 5e-05,
+    "labor_days": 200.0,
+    "materials": {
+     "stone": 12,
+     "timber": 12
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 300.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 200.0
+   },
+   "house": {
+    "affordances": [
+     "shelter",
+     "store"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 40.0,
+    "materials": {
+     "timber": 4
+    },
+    "requires": [],
+    "shelter": 6,
+    "spoil_mult": 1.0,
+    "store": 60.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 30.0
+   },
+   "jail": {
+    "affordances": [
+     "confine"
+    ],
+    "confine_cap": 6,
+    "decay_per_day": 5e-05,
+    "labor_days": 120.0,
+    "materials": {
+     "stone": 16,
+     "timber": 4
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 20.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 120.0
+   },
+   "manor": {
+    "affordances": [
+     "shelter",
+     "store",
+     "enable:judge",
+     "enable:appoint"
+    ],
+    "confine_cap": 2,
+    "decay_per_day": 5e-05,
+    "labor_days": 400.0,
+    "materials": {
+     "stone": 20,
+     "timber": 20
+    },
+    "requires": [],
+    "shelter": 12,
+    "spoil_mult": 1.0,
+    "store": 400.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 400.0
+   },
+   "market": {
+    "affordances": [
+     "workplace",
+     "enable:trade",
+     "pool"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0002,
+    "labor_days": 30.0,
+    "materials": {
+     "timber": 2
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 1000.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 30.0
+   },
+   "mill": {
+    "affordances": [
+     "workplace",
+     "enable:grain>flour"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 120.0,
+    "materials": {
+     "stone": 6,
+     "timber": 10
+    },
+    "requires": [
+     "river_adjacent"
+    ],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 300.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 120.0
+   },
+   "mine": {
+    "affordances": [
+     "workplace"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0002,
+    "labor_days": 200.0,
+    "materials": {
+     "timber": 10
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 300.0,
+    "terrain_allow": [
+     "hills",
+     "mountains"
+    ],
+    "value": 150.0
+   },
+   "palisade": {
+    "affordances": [
+     "defend",
+     "protection"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0003,
+    "labor_days": 200.0,
+    "materials": {
+     "timber": 30
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 0.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 100.0
+   },
+   "pasture": {
+    "affordances": [
+     "workplace",
+     "graze"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 10.0,
+    "materials": {},
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 50.0,
+    "terrain_allow": [
+     "plains",
+     "hills"
+    ],
+    "value": 10.0
+   },
+   "post_house": {
+    "affordances": [
+     "shelter",
+     "lodging",
+     "public",
+     "enable:hire:deliver"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 50.0,
+    "lodging_rate": 0.5,
+    "materials": {
+     "timber": 5
+    },
+    "requires": [
+     "road"
+    ],
+    "shelter": 4,
+    "spoil_mult": 1.0,
+    "store": 100.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 50.0
+   },
+   "school": {
+    "affordances": [
+     "workplace",
+     "enable:teach"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 60.0,
+    "materials": {
+     "timber": 6
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 50.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 60.0
+   },
+   "shrine": {
+    "affordances": [
+     "workplace",
+     "enable:rites",
+     "enable:gathering"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 5e-05,
+    "labor_days": 80.0,
+    "materials": {
+     "stone": 8,
+     "timber": 4
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 100.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills",
+     "mountains"
+    ],
+    "value": 80.0
+   },
+   "smithy": {
+    "affordances": [
+     "workplace"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 60.0,
+    "materials": {
+     "stone": 4,
+     "timber": 4
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 100.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 60.0
+   },
+   "tavern": {
+    "affordances": [
+     "shelter",
+     "lodging",
+     "public",
+     "enable:drink",
+     "enable:socialize"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 60.0,
+    "lodging_rate": 1.0,
+    "materials": {
+     "timber": 6
+    },
+    "requires": [],
+    "shelter": 8,
+    "spoil_mult": 1.0,
+    "store": 100.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 60.0
+   },
+   "warehouse": {
+    "affordances": [
+     "store"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 100.0,
+    "materials": {
+     "timber": 12
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 5000.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 100.0
+   },
+   "watchtower": {
+    "affordances": [
+     "defend"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 5e-05,
+    "labor_days": 100.0,
+    "materials": {
+     "stone": 12,
+     "timber": 4
+    },
+    "requires": [],
+    "shelter": 2,
+    "spoil_mult": 1.0,
+    "store": 20.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills",
+     "mountains"
+    ],
+    "value": 100.0
+   },
+   "well": {
+    "affordances": [
+     "enable:settle_desert",
+     "enable:socialize"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 5e-05,
+    "labor_days": 30.0,
+    "materials": {
+     "stone": 4
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 0.0,
+    "terrain_allow": [
+     "plains",
+     "desert"
+    ],
+    "value": 30.0
+   },
+   "woodlot": {
+    "affordances": [
+     "workplace"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 5.0,
+    "materials": {},
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 200.0,
+    "terrain_allow": [
+     "forest"
+    ],
+    "value": 5.0
+   },
+   "workshop": {
+    "affordances": [
+     "workplace",
+     "enable:craft"
+    ],
+    "confine_cap": 0,
+    "decay_per_day": 0.0001,
+    "labor_days": 40.0,
+    "materials": {
+     "timber": 4
+    },
+    "requires": [],
+    "shelter": 0,
+    "spoil_mult": 1.0,
+    "store": 100.0,
+    "terrain_allow": [
+     "plains",
+     "forest",
+     "hills"
+    ],
+    "value": 40.0
+   }
+  },
+  "crops": {
+   "grain": {
+    "frost_loss": 0.3,
+    "growth_days": 150,
+    "harvest_season": "autumn",
+    "hectares_per_field": 4.0,
+    "item": "grain",
+    "moisture_max": 0.9,
+    "moisture_min": 0.15,
+    "moisture_optimal": 0.5,
+    "plant_season": "spring",
+    "stress_loss_per_day": 0.003,
+    "yield_kg_per_ha": 800.0
+   }
+  },
+  "disease": {
+   "grey_cough": {
+    "beta": {
+     "people": 0.15
+    },
+    "cross": {},
+    "effects": {
+     "production": 0.0,
+     "work": 0.3
+    },
+    "hosts": [
+     "people"
+    ],
+    "immunity": true,
+    "incubation_days": 4,
+    "infectious_days": 12,
+    "mortality": {
+     "people": 0.08
+    },
+    "routes": [
+     "contact"
+    ],
+    "symptoms": [
+     "fever",
+     "cough",
+     "grey pallor"
+    ]
+   },
+   "murrain": {
+    "beta": {
+     "cattle": 0.2,
+     "game": 0.3,
+     "sheep": 0.2
+    },
+    "cross": {
+     "cattle>sheep": 0.1,
+     "game>cattle": 0.05,
+     "game>sheep": 0.05
+    },
+    "effects": {
+     "production": 0.3,
+     "work": 0.5
+    },
+    "hosts": [
+     "game",
+     "cattle",
+     "sheep"
+    ],
+    "immunity": true,
+    "incubation_days": 5,
+    "infectious_days": 10,
+    "mortality": {
+     "cattle": 0.3,
+     "game": 0.4,
+     "sheep": 0.3
+    },
+    "routes": [
+     "contact",
+     "water"
+    ],
+    "symptoms": [
+     "stops eating",
+     "staggering"
+    ]
+   }
+  },
+  "items": {
+   "cattle": {
+    "breed_p": 0.3,
+    "breed_season": "spring",
+    "fodder_per_day": 1000,
+    "kind": "livestock",
+    "price": 60.0,
+    "produces": {
+     "milk": 300
+    },
+    "spoil_per_day": 0.0,
+    "weight": 400.0
+   },
+   "codex": {
+    "capacity": 600,
+    "decay_p_per_day": 0.0005,
+    "fireproof": false,
+    "kind": "medium",
+    "price": 80.0,
+    "reusable": false,
+    "spoil_per_day": 0.0,
+    "weight": 3.0
+   },
+   "coin": {
+    "kind": "coin",
+    "price": 1.0,
+    "spoil_per_day": 0.0,
+    "weight": 0.01
+   },
+   "fish": {
+    "kind": "food",
+    "price": 0.04,
+    "spoil_per_day": 0.08,
+    "weight": 0.01
+   },
+   "flour": {
+    "kind": "food",
+    "price": 0.03,
+    "spoil_per_day": 0.003,
+    "weight": 0.01
+   },
+   "fodder": {
+    "kind": "material",
+    "price": 0.005,
+    "spoil_per_day": 0.002,
+    "weight": 0.01
+   },
+   "grain": {
+    "kind": "food",
+    "price": 0.02,
+    "spoil_per_day": 0.001,
+    "weight": 0.01
+   },
+   "hide": {
+    "kind": "material",
+    "price": 3.0,
+    "spoil_per_day": 0.0,
+    "weight": 2.0
+   },
+   "ledger": {
+    "capacity": 200,
+    "decay_p_per_day": 0.001,
+    "fireproof": false,
+    "kind": "medium",
+    "price": 20.0,
+    "reusable": false,
+    "spoil_per_day": 0.0,
+    "weight": 1.0
+   },
+   "meat": {
+    "kind": "food",
+    "price": 0.05,
+    "spoil_per_day": 0.05,
+    "weight": 0.01
+   },
+   "milk": {
+    "kind": "food",
+    "price": 0.03,
+    "spoil_per_day": 0.2,
+    "weight": 0.01
+   },
+   "ore": {
+    "kind": "material",
+    "price": 4.0,
+    "spoil_per_day": 0.0,
+    "weight": 10.0
+   },
+   "sheep": {
+    "breed_p": 0.6,
+    "breed_season": "spring",
+    "fodder_per_day": 150,
+    "kind": "livestock",
+    "price": 12.0,
+    "produces": {
+     "hide": 0.003
+    },
+    "spoil_per_day": 0.0,
+    "weight": 50.0
+   },
+   "sheet": {
+    "capacity": 2,
+    "decay_p_per_day": 0.003,
+    "fireproof": false,
+    "kind": "medium",
+    "price": 1.0,
+    "reusable": false,
+    "spoil_per_day": 0.0,
+    "weight": 0.01
+   },
+   "stele": {
+    "capacity": 6,
+    "decay_p_per_day": 0.0,
+    "fireproof": true,
+    "kind": "medium",
+    "price": 0.0,
+    "reusable": false,
+    "spoil_per_day": 0.0,
+    "weight": 200.0
+   },
+   "stone": {
+    "kind": "material",
+    "price": 1.0,
+    "spoil_per_day": 0.0,
+    "weight": 25.0
+   },
+   "tablet": {
+    "capacity": 1,
+    "decay_p_per_day": 0.001,
+    "fireproof": false,
+    "kind": "medium",
+    "price": 2.0,
+    "reusable": true,
+    "spoil_per_day": 0.0,
+    "weight": 0.3
+   },
+   "timber": {
+    "kind": "material",
+    "price": 2.0,
+    "spoil_per_day": 0.0,
+    "weight": 20.0
+   },
+   "tools": {
+    "kind": "tool",
+    "price": 15.0,
+    "spoil_per_day": 0.0,
+    "weight": 2.0
+   },
+   "wagon": {
+    "carry_cap_add": 400.0,
+    "kind": "vehicle",
+    "price": 120.0,
+    "spoil_per_day": 0.0,
+    "weight": 150.0
+   },
+   "wax": {
+    "kind": "material",
+    "price": 0.5,
+    "spoil_per_day": 0.0,
+    "weight": 0.05
+   }
+  },
+  "roles": {
+   "bandit": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.5,
+    "workplace": "none"
+   },
+   "cartographer": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [
+     "literate"
+    ],
+    "role_weight": 0.4,
+    "workplace": "none"
+   },
+   "courier": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.2,
+    "workplace": "none"
+   },
+   "crafter": {
+    "enforcement": false,
+    "produces": [
+     "tools"
+    ],
+    "requires": [],
+    "role_weight": 0.1,
+    "workplace": "workshop"
+   },
+   "enforcer": {
+    "enforcement": true,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.6,
+    "workplace": "hall"
+   },
+   "farmer": {
+    "enforcement": false,
+    "produces": [
+     "grain"
+    ],
+    "requires": [],
+    "role_weight": 0.0,
+    "workplace": "farm"
+   },
+   "fisher": {
+    "enforcement": false,
+    "produces": [
+     "fish"
+    ],
+    "requires": [],
+    "role_weight": 0.0,
+    "workplace": "fishery"
+   },
+   "herder": {
+    "enforcement": false,
+    "produces": [
+     "milk",
+     "hide"
+    ],
+    "requires": [],
+    "role_weight": 0.0,
+    "workplace": "pasture"
+   },
+   "historian": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [
+     "literate"
+    ],
+    "role_weight": 0.6,
+    "workplace": "none"
+   },
+   "hunter": {
+    "enforcement": false,
+    "produces": [
+     "meat",
+     "hide"
+    ],
+    "requires": [],
+    "role_weight": 0.1,
+    "workplace": "none"
+   },
+   "judge": {
+    "enforcement": true,
+    "produces": [],
+    "requires": [
+     "literate"
+    ],
+    "role_weight": 1.0,
+    "workplace": "hall"
+   },
+   "lord": {
+    "enforcement": true,
+    "produces": [],
+    "requires": [],
+    "role_weight": 2.0,
+    "workplace": "manor"
+   },
+   "mason": {
+    "enforcement": false,
+    "produces": [
+     "stone"
+    ],
+    "requires": [],
+    "role_weight": 0.2,
+    "workplace": "none"
+   },
+   "merchant": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.5,
+    "workplace": "market"
+   },
+   "miller": {
+    "enforcement": false,
+    "produces": [
+     "flour"
+    ],
+    "requires": [],
+    "role_weight": 0.3,
+    "workplace": "mill"
+   },
+   "miner": {
+    "enforcement": false,
+    "produces": [
+     "ore",
+     "stone"
+    ],
+    "requires": [],
+    "role_weight": 0.1,
+    "workplace": "mine"
+   },
+   "papermaker": {
+    "enforcement": false,
+    "produces": [
+     "sheet"
+    ],
+    "requires": [],
+    "role_weight": 0.2,
+    "workplace": "workshop"
+   },
+   "priest": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [],
+    "role_weight": 1.0,
+    "workplace": "shrine"
+   },
+   "reeve": {
+    "enforcement": true,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.6,
+    "workplace": "hall"
+   },
+   "smith": {
+    "enforcement": false,
+    "produces": [
+     "tools"
+    ],
+    "requires": [],
+    "role_weight": 0.3,
+    "workplace": "smithy"
+   },
+   "soldier": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.3,
+    "workplace": "none"
+   },
+   "steward": {
+    "enforcement": true,
+    "produces": [],
+    "requires": [
+     "literate"
+    ],
+    "role_weight": 0.8,
+    "workplace": "hall"
+   },
+   "tutor": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [
+     "literate"
+    ],
+    "role_weight": 0.4,
+    "workplace": "school"
+   },
+   "vagrant": {
+    "enforcement": false,
+    "produces": [],
+    "requires": [],
+    "role_weight": 0.1,
+    "workplace": "none"
+   },
+   "woodcutter": {
+    "enforcement": false,
+    "produces": [
+     "timber"
+    ],
+    "requires": [],
+    "role_weight": 0.0,
+    "workplace": "woodlot"
+   }
+  },
+  "theme": {
+   "chronicler_voice": "plain annalist",
+   "name": "default"
+  },
+  "wildlife": {
+   "game": {
+    "diet": [
+     "vegetation"
+    ],
+    "hunt_yield_kg": 40.0,
+    "k_per_km2": 20.0,
+    "r": 0.002,
+    "raids": false
+   },
+   "predator": {
+    "diet": [
+     "game",
+     "livestock"
+    ],
+    "hunt_yield_kg": 15.0,
+    "k_per_km2": 2.0,
+    "r": 0.001,
+    "raids": false
+   },
+   "raider": {
+    "diet": [
+     "vegetation",
+     "crops"
+    ],
+    "hunt_yield_kg": 8.0,
+    "k_per_km2": 60.0,
+    "r": 0.004,
+    "raids": true
+   }
+  }
+ },
+ "derived": {
+  "cell_area_km2": 0.8660254037844386,
+  "cell_cross_hours_base": 2.0,
+  "cells": 3584,
+  "cells_per_day_plains": 25.0,
+  "chronicler_ticks": {
+   "address": 12,
+   "country": 608,
+   "locality": 61,
+   "person": 243,
+   "region": 122
+  },
+  "consumption_units_per_day": 60,
+  "crop_units_per_field_max": {
+   "grain": 320000.0
+  },
+  "est_gpu_hours": 40.56,
+  "grid_h": 56,
+  "grid_w": 64,
+  "k_at_start": 8,
+  "stage_days": {
+   "adult": 7300,
+   "child": 1825,
+   "elder": 20075,
+   "infant": 0,
+   "youth": 5110
+  },
+  "stage_order": [
+   "infant",
+   "child",
+   "youth",
+   "adult",
+   "elder"
+  ],
+  "ticks_per_year": 12.166666666666666,
+  "total_days": 182500,
+  "total_ticks": 6084,
+  "warnings": [
+   "estimated 41 GPU-h exceeds budget 40.0; K will be throttled"
+  ],
+  "wildlife_k_per_cell": {
+   "game": 17.32050807568877,
+   "predator": 1.7320508075688772,
+   "raider": 51.96152422706631
+  }
+ },
+ "run": {
+  "agency": {
+   "action_hours": {
+    "cite": 1.0,
+    "firebreak": 3.0,
+    "give": 0.25,
+    "hunt": 4.0,
+    "note": 1.0,
+    "read": 0.5,
+    "say": 0.25,
+    "teach": 2.0,
+    "tell": 0.25
+   },
+   "firebreak_clear": 0.5,
+   "hunt_item": "meat",
+   "packet_memory_limit": 12
+  },
+  "agriculture": {
+   "activity_hours_per_day": 8.0,
+   "handling_kg_per_hour": 60.0,
+   "harvest_labor_days_per_ha": 3.0,
+   "pantry_days": 7,
+   "plant_labor_days_per_ha": 2.0,
+   "same_cell_place_hours": 0.25
+  },
+  "attention": {
+   "debt_norm_days": 3600,
+   "decay": 0.7,
+   "k_cap": 40,
+   "k_per_pop": 0.08,
+   "k_per_tick": 8,
+   "min_stage": "youth",
+   "scene_max_people": 5,
+   "spark_p": 0.0025,
+   "t_named": 0.5,
+   "weights": {
+    "alarm": 2.0,
+    "debt": 0.05,
+    "deviation": 1.2,
+    "proximity": 1.0,
+    "pull": 0.5,
+    "role": 0.4,
+    "social": 0.6,
+    "spark": 0.1
+   }
+  },
+  "capabilities": {
+   "literate": {
+    "enables": [
+     "record",
+     "read",
+     "copy"
+    ],
+    "learn_days": 120,
+    "min_stage": "child",
+    "needs_medium": true,
+    "self_teach": 0.0,
+    "teachers": "any_holder"
+   },
+   "planning": {
+    "enables": [
+     "plan"
+    ],
+    "learn_days": 60,
+    "min_stage": "youth",
+    "needs_medium": false,
+    "self_teach": 0.0,
+    "teachers": "any_holder"
+   },
+   "teach_weight": {
+    "anyone": 0.2,
+    "historian": 3.0,
+    "parent": 2.0,
+    "priest": 3.0,
+    "tutor": 4.0
+   }
+  },
+  "catalog": {
+   "disabled": [],
+   "enabled": "theme-default",
+   "extra": [],
+   "proposals": true
+  },
+  "chroniclers": {
+   "address_every_years": 1.0,
+   "bias_prompts": {
+    "default": "plain annalist"
+   },
+   "country_every_years": 50.0,
+   "locality_every_years": 5.0,
+   "person_every_years": 20.0,
+   "person_lit_min": 3,
+   "region_every_years": 10.0
+  },
+  "contact": {
+   "commons_mult": 0.3,
+   "hours_per_exchange": 0.25,
+   "p_base": 0.3,
+   "receive_cap": 3,
+   "same_household_mult": 1.5,
+   "send_cap": 2,
+   "slots": 2
+  },
+  "demography": {
+   "bond_chance_per_year": 0.2,
+   "enabled": false,
+   "fertile_max_years": 40,
+   "fertile_min_years": 18,
+   "mortality_mult": {
+    "adult": 1.0,
+    "child": 0.4,
+    "elder": 5.0,
+    "infant": 3.0,
+    "youth": 0.35
+   }
+  },
+  "development": {
+   "elder_teach_mult": 2.0,
+   "role_inherit_p": 0.6,
+   "stage_rate": {
+    "adult": 0.6,
+    "child": 1.0,
+    "elder": 0.3,
+    "infant": 0.0,
+    "youth": 1.0
+   },
+   "stage_work_mult": {
+    "adult": 1.0,
+    "child": 1.0,
+    "elder": 0.5,
+    "infant": 1.0,
+    "youth": 1.0
+   },
+   "trait_drift": false
+  },
+  "events": {
+   "witness": {
+    "default": "place",
+    "fire_ignited": "cell",
+    "fire_spread": "cell",
+    "gathering:open_air": "cell",
+    "tell": "none"
+   }
+  },
+  "fire": {
+   "base_hours": 2.0,
+   "building_clearing": 0.3,
+   "building_damage_per_hour": 0.25,
+   "burnout": 0.05,
+   "hearth_p": 0.0005,
+   "min_effective_fuel": 0.25,
+   "spot_p": 0.0,
+   "spot_range_km": 0.0
+  },
+  "gossip": {
+   "crowd_fidelity": 0.8,
+   "hop_decay": 0.8,
+   "overhear_p": 0.2,
+   "rate_days": 30,
+   "salience": {
+    "default": 1.0,
+    "died:claim_holder": 4.0,
+    "gathering": 2.0,
+    "tally": 3.0
+   },
+   "tell_fidelity_mult": 0.9
+  },
+  "hire": {
+   "tenure_mult": [
+    [
+     0,
+     1.0
+    ],
+    [
+     365,
+     1.4
+    ],
+    [
+     1825,
+     2.0
+    ]
+   ]
+  },
+  "items": {
+   "granary_spoil_mult": 0.5,
+   "spoil_per_day": {
+    "food": 0.01
+   }
+  },
+  "justice": {
+   "weights": {
+    "default": {
+     "confine": 2.0,
+     "dismiss": 1.0,
+     "execute": 0.2,
+     "exile": 1.0,
+     "fine": 4.0,
+     "maim": 0.2,
+     "restitution": 3.0
+    }
+   }
+  },
+  "leisure": {
+   "court_private_accept": 0.5,
+   "court_private_trait_mods": {
+    "discreet": 2.0,
+    "gregarious": 0.6,
+    "modest": 1.5,
+    "proud": 0.5
+   },
+   "court_refusal_delta": {
+    "private": -1.0,
+    "public": -2.0
+   },
+   "drink_quarrel_mult": 3.0,
+   "edge_decay_per_day": 0.002,
+   "edge_gain": 0.05,
+   "kin_floor": 0.2,
+   "pending_days": 90,
+   "quarrel_p": 0.01,
+   "role_weights": {
+    "naming": {
+     "cartographer": 3.0,
+     "default": 0.05,
+     "historian": 4.0,
+     "lord": 2.0
+    }
+   },
+   "trait_weights": {
+    "gregarious": {
+     "drink": 2.0,
+     "socialize": 3.0
+    },
+    "pious": {
+     "rites": 3.0
+    },
+    "solitary": {
+     "craft": 2.0,
+     "rest": 2.0
+    }
+   }
+  },
+  "llm": {
+   "avg_scene_seconds": 3.0,
+   "format": "schema",
+   "gpu_hours_budget": 40.0,
+   "keep_alive": "30m",
+   "max_scene_tokens": 400,
+   "model": "qwen3.5:9b",
+   "num_ctx": 4096,
+   "num_predict": 300,
+   "on_invalid": "routine",
+   "retries": 2,
+   "temperature": 0.8,
+   "think": false,
+   "timeout_s": 120.0,
+   "url": "http://localhost:11434"
+  },
+  "loans": {
+   "collateral_enabled": false,
+   "default_rate": 0.1
+  },
+  "localities": {
+   "abandon_days": 1825,
+   "check_days": 90,
+   "harden_refs": 3,
+   "min_pop": 8,
+   "min_tenure_days": 365
+  },
+  "market": {
+   "bargain": 0.7,
+   "dear": 1.5,
+   "elasticity": 0.6,
+   "mean_window_days": 90,
+   "price_cap": 8.0
+  },
+  "needs": {
+   "age_mult": {
+    "adult": 1.0,
+    "child": 1.2,
+    "elder": 1.6,
+    "infant": 1.2,
+    "youth": 1.0
+   },
+   "consumption_g_per_day": 600,
+   "drift_per_day": {
+    "rest": 0.04,
+    "safety": -0.02,
+    "social": 0.01
+   },
+   "safety_hit": {
+    "contested_control": 0.05,
+    "heard_violence": 0.15,
+    "witnessed_violence": 0.3
+   },
+   "starve_days": 20,
+   "thresholds": {
+    "critical": 0.15,
+    "low": 0.4
+   }
+  },
+  "observation": {
+   "forage_bands": [
+    0.2,
+    0.6
+   ],
+   "obs_alpha": 0.1,
+   "surprise_k": 1.5
+  },
+  "people": {
+   "carry_cap": 30.0,
+   "memory_base": 6,
+   "memory_per_role_weight": 6,
+   "traits_per_person": 3
+  },
+  "plans": {
+   "base_horizon_days": 3,
+   "base_steps": 2,
+   "goal_kinds": [
+    "food",
+    "shelter",
+    "travel",
+    "record",
+    "social",
+    "other"
+   ],
+   "horizon_days_per_level": 11,
+   "max_assumptions": 6,
+   "max_chars": 200,
+   "steps_per_level": 4,
+   "surprise_events": [
+    "died",
+    "fire_ignited",
+    "fire_spread",
+    "burned",
+    "destroyed",
+    "found_asleep",
+    "journey_refused",
+    "journey_abandoned",
+    "lodging_refused",
+    "injured",
+    "killed"
+   ]
+  },
+  "polity": {
+   "control_window_days": 365,
+   "enabled": true,
+   "initial_claims": 0,
+   "tax_cadence_days": 90,
+   "tax_rate": 0.1
+  },
+  "population": {
+   "age_dist": "premodern",
+   "birth_rate_per_year": 0.035,
+   "cluster_spread_km": 2.0,
+   "cluster_terrain_prefs": {
+    "forest": 1.0,
+    "hills": 1.0,
+    "plains": 3.0,
+    "water_adjacent": 2.0
+   },
+   "cluster_weights": [
+    0.4,
+    0.3,
+    0.2,
+    0.1
+   ],
+   "clusters": 4,
+   "death_base_per_year": 0.025,
+   "family_seed": true,
+   "food_buffer_months": 10,
+   "food_ratio": {
+    "desert": 0.9,
+    "forest": 0.6,
+    "hills": 0.7,
+    "marsh": 0.8,
+    "plains": 0.5
+   },
+   "household_size_dist": [
+    0.1,
+    0.2,
+    0.25,
+    0.2,
+    0.15,
+    0.1
+   ],
+   "initial": 100,
+   "initial_road_level": 1,
+   "roles_mix": {
+    "crafter": 0.1,
+    "farmer": 0.7,
+    "merchant": 0.05,
+    "other": 0.05,
+    "priest": 0.05,
+    "soldier": 0.05
+   },
+   "wealth_gini": 0.4
+  },
+  "prompts": {
+   "custom_chronicle": "",
+   "custom_scene": "",
+   "custom_setup": "",
+   "exemplars_per_region": 3,
+   "tone": "terse, saga-like",
+   "voice_rewrite_on_first_lit": true
+  },
+  "records": {
+   "auto_record": {
+    "historian": [
+     "*"
+    ],
+    "judge": [
+     "accuse",
+     "judge"
+    ],
+    "merchant": [
+     "transfer"
+    ],
+    "priest": [
+     "born",
+     "died",
+     "bond",
+     "gathering"
+    ],
+    "steward": [
+     "collect_tax",
+     "grant",
+     "appoint"
+    ]
+   },
+   "copy_loss": 0.02,
+   "index_entries_in_context": 12,
+   "interview_p": 0.4,
+   "max_chars": 400,
+   "refill_threshold": 0.1,
+   "seal_requires_item": "",
+   "write_weight": {
+    "anyone": 0.05,
+    "cartographer": 3.0,
+    "historian": 4.0,
+    "judge": 3.0,
+    "lord": 1.0,
+    "merchant": 3.0,
+    "priest": 3.0,
+    "steward": 3.0
+   }
+  },
+  "resolver": {
+   "base_p": {
+    "steal": 0.5
+   },
+   "catastrophe_scale": 1.0
+  },
+  "rng": {
+   "generator": "philox",
+   "layout_version": 2
+  },
+  "run": {
+   "checkpoint_every_ticks": 12,
+   "days_per_tick": 30,
+   "name": "default",
+   "origin": "established",
+   "seed": 42,
+   "years": 500
+  },
+  "scenario": {
+   "blight": {
+    "day": 90,
+    "loss": 0.5
+   },
+   "drought": {
+    "days": 40,
+    "evaporation_mult": 3.0,
+    "rain_mult": 0.2,
+    "start_day": 20
+   },
+   "enabled": false,
+   "ignition": {
+    "count": 2,
+    "day": 45,
+    "distance_cells": 3
+   },
+   "stranger": {
+    "count": 1,
+    "day": 30,
+    "ration_kg": 5.0
+   }
+  },
+  "schema_version": 2,
+  "secrets": {
+   "discovery": {
+    "court:private": 0.002,
+    "killed": 0.01,
+    "steal": 0.005
+   }
+  },
+  "setup": {
+   "chronicler_role": "historian",
+   "coin_by_wealth": {
+    "high": 400,
+    "lord": 4000,
+    "low": 5,
+    "mid": 40
+   },
+   "historian_rate": 0.3,
+   "household_buildings": {
+    "anyone": [
+     "house",
+     "granary"
+    ],
+    "merchant": [
+     "market"
+    ]
+   },
+   "literacy_by_role": {
+    "anyone": 0.05,
+    "cartographer": 0.9,
+    "historian": 1.0,
+    "judge": 0.9,
+    "lord": 0.6,
+    "merchant": 0.5,
+    "priest": 0.9,
+    "steward": 0.8
+   },
+   "literacy_scale": 1.0,
+   "media_by_role": {
+    "historian": "codex",
+    "judge": "ledger",
+    "merchant": "ledger",
+    "priest": "ledger",
+    "steward": "ledger"
+   },
+   "notable_starters": 4,
+   "pocket_coin": 20,
+   "seed_media": true,
+   "subsistence_role": "farmer"
+  },
+  "sleep": {
+   "access": {
+    "home": {
+     "affordance": "shelter",
+     "priority": 10,
+     "quality": 1.0,
+     "relation": "own"
+    },
+    "household": {
+     "affordance": "shelter",
+     "priority": 20,
+     "quality": 1.0,
+     "relation": "household"
+    },
+    "lodging": {
+     "affordance": "lodging",
+     "event": "transfer",
+     "priority": 30,
+     "quality": 0.9,
+     "relation": "any",
+     "rent": true
+    },
+    "open": {
+     "event": "slept_rough",
+     "open_air": true,
+     "priority": 100,
+     "quality": 1.0,
+     "relation": "any"
+    },
+    "outbuilding": {
+     "affordance": "store",
+     "min_shelter": 0.0,
+     "priority": 40,
+     "quality": 0.6,
+     "relation": "own"
+    },
+    "trespass": {
+     "affordance": "shelter",
+     "event": "found_asleep",
+     "priority": 50,
+     "quality": 0.5,
+     "relation": "any",
+     "witness_owner": true
+    }
+   },
+   "condition_weight": 0.5,
+   "consequences": {
+    "exhausted": {
+     "hours_mult": 0.5,
+     "rest_below": 0.15
+    },
+    "exposure": {
+     "cause": "exposure",
+     "consecutive_nights": 3,
+     "health_drain": 0.1,
+     "quality_below": 0.3,
+     "seasons": [
+      "winter",
+      "autumn"
+     ]
+    },
+    "tired": {
+     "hours_mult": 0.75,
+     "rest_at_least": 0.15,
+     "rest_below": 0.4
+    }
+   },
+   "open_air_mult": {
+    "autumn": 0.4,
+    "spring": 0.5,
+    "summer": 0.7,
+    "winter": 0.15
+   },
+   "ration_refuse": false,
+   "ration_route_margin_hours": 0.0,
+   "reference_shelter": 6.0,
+   "rest_recovery_per_quality": 0.08,
+   "shelter_need_per_quality": 1.0,
+   "wet_mult": 0.5
+  },
+  "stages": {
+   "adult": 20,
+   "child": 5,
+   "elder": 55,
+   "infant": 0,
+   "youth": 14
+  },
+  "stance": {
+   "max_chars": 60
+  },
+  "succession": {
+   "mode": {
+    "lordship": "inherit",
+    "reeve": "elective",
+    "steward": "appointed"
+   },
+   "rule": "designated"
+  },
+  "tension": {
+   "claim_overlap": 0
+  },
+  "time": {
+   "work_days": {
+    "default": 0.7,
+    "farmer": {
+     "autumn": 0.9,
+     "spring": 0.8,
+     "summer": 0.6,
+     "winter": 0.2
+    },
+    "lord": 0.2,
+    "miller": 0.6
+   }
+  },
+  "transfer": {
+   "default_visibility": "public"
+  },
+  "transit": {
+   "cart_mult": 0.7,
+   "injured_mult": 0.5,
+   "km_per_day": 25.0,
+   "mounted_mult": 2.0,
+   "river_cross_mult": 1.5,
+   "road_mult": [
+    1.0,
+    0.7,
+    0.5,
+    0.35
+   ],
+   "road_revert_days": 3650,
+   "road_wear_decay_per_day": 0.05,
+   "road_wear_level_threshold": 400.0,
+   "road_wear_per_crossing": 1.0,
+   "season_mult": {
+    "autumn": 1.0,
+    "spring": 1.0,
+    "summer": 1.0,
+    "winter": 0.6
+   },
+   "terrain_fatigue": {
+    "desert": 1.5,
+    "forest": 1.2,
+    "hills": 1.5,
+    "marsh": 1.8,
+    "mountains": 2.5,
+    "plains": 1.0
+   }
+  },
+  "units": {
+   "cell_km": 1.0,
+   "day_hours": 24,
+   "food_unit_g": 10,
+   "weight_unit": "kg"
+  },
+  "validator": {
+   "conservation_sample": 1.0,
+   "strict": true
+  },
+  "weather": {
+   "evaporation_mm": {
+    "autumn": 1.5,
+    "spring": 1.5,
+    "summer": 3.0,
+    "winter": 0.5
+   },
+   "lightning_p": {
+    "autumn": 0.0005,
+    "spring": 0.0005,
+    "summer": 0.002,
+    "winter": 0.0
+   },
+   "moisture_capacity_mm": 300.0,
+   "persistence": 0.7,
+   "rain_mm_mean": {
+    "autumn": 2.5,
+    "spring": 2.5,
+    "summer": 1.5,
+    "winter": 2.0
+   },
+   "wind_mean_kph": 12.0
+  },
+  "wildlife": {
+   "dispersal": 0.1,
+   "habitat_coupling": true,
+   "herd_predation_p": 0.01,
+   "intake_cap": 0.004,
+   "intake_starve": 0.005,
+   "predation_rate": 0.02,
+   "prey_coupling": false,
+   "prey_intake": false,
+   "prey_refuge": false,
+   "prey_response": false,
+   "prey_satiation": 0.3,
+   "raid_rate": 0.002,
+   "refuge_fill": 0.1,
+   "response_fill": 0.3,
+   "response_floor": 0.1,
+   "starvation_rate": 0.01
+  },
+  "world": {
+   "buildable": {
+    "desert": false,
+    "forest": true,
+    "hills": true,
+    "marsh": false,
+    "mountains": false,
+    "plains": true,
+    "water": false
+   },
+   "forbid": [
+    "gunpowder",
+    "printing"
+   ],
+   "height_km": 48,
+   "land_mix": {
+    "desert": 0.05,
+    "forest": 0.35,
+    "hills": 0.15,
+    "marsh": 0.05
+   },
+   "mountain_fraction": 0.1,
+   "region_count": 7,
+   "relief_m": 1500.0,
+   "river_count": 3,
+   "setup_prompt": "",
+   "terrain_cost": {
+    "desert": 2.0,
+    "forest": 1.5,
+    "hills": 2.0,
+    "marsh": 2.5,
+    "mountains": 4.0,
+    "plains": 1.0,
+    "water": 0.0
+   },
+   "terrain_octaves": 5,
+   "terrain_scale_km": 16.0,
+   "terrain_seed": 0,
+   "theme": "default",
+   "water_fraction": 0.25,
+   "width_km": 64
+  }
+ },
+ "run_id": "35d413277388"
+}

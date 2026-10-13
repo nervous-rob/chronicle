@@ -1,0 +1,555 @@
+# Chronicle — default run configuration (RUN_PARAMS v2, schema_version 2)
+#
+# A run is fully defined by (config, seed): run_id = hash(frozen config).
+# Conventions, enforced by the loader (chronicle/config.py):
+#   - every rate is PER DAY, every distance is KM, every weight is KG, food is in food_unit_g grams
+#   - "tick" is a cadence for attention / LLM scenes / chroniclers / checkpoints only;
+#     nothing physical is denominated in ticks
+#   - chronicler cadences are in YEARS, converted to ticks at load
+#   - unknown keys are errors; sections marked "free keys" accept ids that must exist in the theme catalog
+#   - a user run.toml is a sparse overlay on this file; sweeps use dotted overrides
+
+schema_version = 2
+
+[run]
+name = "default"
+seed = 42
+years = 500
+days_per_tick = 30            # 1..365; derived.total_ticks = ceil(years*365/days_per_tick)
+origin = "established"        # founding | established (WALKTHROUGH G8)
+checkpoint_every_ticks = 12
+
+[units]
+cell_km = 1.0                 # hex cell, flat-to-flat; per-cell rates are converted from real units at load
+weight_unit = "kg"            # documentation only; every weight in config and catalog is kg
+food_unit_g = 10              # fixed-point food quantum (ECOLOGY F3)
+day_hours = 24
+
+[rng]
+generator = "philox"          # per-process streams keyed (seed, day, process_id, entity_id)
+layout_version = 2            # low counter words: draw index; high words: day/entity
+
+[world]
+theme = "default"             # themes/<theme>/catalog.toml
+width_km = 64
+height_km = 48
+terrain_seed = 0              # 0 = derive from run.seed
+water_fraction = 0.25
+mountain_fraction = 0.10
+river_count = 3
+region_count = 7
+setup_prompt = ""
+forbid = ["gunpowder", "printing"]
+terrain_scale_km = 16.0       # characteristic feature size of the elevation/wetness noise
+terrain_octaves = 5
+relief_m = 1500.0             # elevation 0..1 maps to 0..relief_m (slope factors)
+land_mix = { hills = 0.15, forest = 0.35, marsh = 0.05, desert = 0.05 }   # fractions of land (non-water, non-mountain); rest = plains
+
+[world.terrain_cost]          # travel-time multiplier vs plains (SPEC 1.2); 0 = impassable
+plains = 1.0
+forest = 1.5
+hills = 2.0
+marsh = 2.5
+desert = 2.0
+mountains = 4.0               # impassable unless road_level >= 1
+water = 0.0
+
+[world.buildable]
+plains = true
+forest = true
+hills = true
+marsh = false
+desert = false                # unless well
+mountains = false
+water = false
+
+[transit]
+km_per_day = 25.0             # walking, plains, no road (ERRATA #3)
+road_mult = [1.0, 0.7, 0.5, 0.35]     # by road_level 0..3; an edge uses the worse side
+river_cross_mult = 1.5        # unless bridge / ford
+season_mult = { spring = 1.0, summer = 1.0, autumn = 1.0, winter = 0.6 }
+mounted_mult = 2.0
+cart_mult = 0.7
+injured_mult = 0.5
+road_wear_per_crossing = 1.0
+road_wear_decay_per_day = 0.05
+road_wear_level_threshold = 400.0
+road_revert_days = 3650       # unused road -> trail in ~10 y
+terrain_fatigue = { plains = 1.0, forest = 1.2, hills = 1.5, marsh = 1.8, desert = 1.5, mountains = 2.5 }
+
+[population]
+initial = 100
+clusters = 4
+cluster_spread_km = 2.0
+cluster_weights = [0.4, 0.3, 0.2, 0.1]          # len == clusters, sums to 1
+cluster_terrain_prefs = { plains = 3.0, forest = 1.0, hills = 1.0, water_adjacent = 2.0 }
+age_dist = "premodern"        # premodern | young | flat
+family_seed = true
+household_size_dist = [0.10, 0.20, 0.25, 0.20, 0.15, 0.10]    # p(size = 1..6)
+roles_mix = { farmer = 0.7, crafter = 0.1, merchant = 0.05, priest = 0.05, soldier = 0.05, other = 0.05 }   # worldgen-v1: a head with a producing role gets its workplace; without a market, non-farm households live on their buffer only
+food_ratio = { plains = 0.5, forest = 0.6, hills = 0.7, marsh = 0.8, desert = 0.9 }
+wealth_gini = 0.4
+food_buffer_months = 10       # seeded food per household at t0 (months of consumption). The run starts in spring; the first harvest is autumn (~day 182+), so < 7 starves everyone before it (worldgen-v1 finding)
+initial_road_level = 1
+birth_rate_per_year = 0.035
+death_base_per_year = 0.025
+
+[demography]
+# Off preserves the pre-lifecycle baseline. When enabled, bonded co-resident adults form
+# families, births and background deaths occur, and a surviving household adult takes over
+# a dead worker's routine assignment.
+enabled = false
+fertile_min_years = 18
+fertile_max_years = 40
+bond_chance_per_year = 0.20
+# Relative to population.death_base_per_year; deliberately a coarse lifecycle, not calibration.
+mortality_mult = { infant = 3.0, child = 0.4, youth = 0.35, adult = 1.0, elder = 5.0 }
+
+[setup]
+literacy_scale = 1.0
+historian_rate = 0.3          # p(chronicler) per cluster, x literacy_scale (worldgen-v1: one candidate per cluster)
+notable_starters = 4          # household heads returned by setup.generate() for run.py to bind a policy to
+seed_media = true             # give auto_record roles a matching medium at t0
+pocket_coin = 20              # coin carried by a household head at t0; the rest of the class amount sits in the home
+chronicler_role = "historian" # role id given to the per-cluster chronicler ("" = none); its `requires` are granted
+subsistence_role = "farmer"   # fallback food-producing role for a household with no food producer ("" = none): first non-head adult, else head. Without a market such a household lives on its buffer and starves in month ~9 (worldgen-v1 finding)
+
+[setup.household_buildings]   # free keys = role ids (+ anyone): building kinds every household (anyone) / a head with that role gets.
+anyone = ["house", "granary"] # the head's role workplace (catalog roles.<id>.workplace) is added automatically. First sheltered = home,
+merchant = ["market"]         # largest store = store. Buildings that cannot be sited are counted in the setup report, never faked.
+
+[setup.media_by_role]         # free keys = role ids; medium item id a recording role (records.auto_record) starts with when seed_media
+historian = "codex"
+merchant = "ledger"
+priest = "ledger"
+judge = "ledger"
+steward = "ledger"
+
+[setup.coin_by_wealth]
+low = 5
+mid = 40
+high = 400
+lord = 4000
+
+[setup.literacy_by_role]      # free keys = role ids (+ anyone)
+historian = 1.0
+priest = 0.9
+judge = 0.9
+steward = 0.8
+cartographer = 0.9
+merchant = 0.5
+lord = 0.6
+anyone = 0.05
+
+[stages]                      # lower bound in years, strictly increasing
+infant = 0
+child = 5
+youth = 14
+adult = 20
+elder = 55
+
+[development]
+role_inherit_p = 0.6
+stage_rate = { infant = 0.0, child = 1.0, youth = 1.0, adult = 0.6, elder = 0.3 }
+elder_teach_mult = 2.0
+stage_work_mult = { infant = 1.0, child = 1.0, youth = 1.0, adult = 1.0, elder = 0.5 }   # work-day probability multiplier per life stage (all stages required)
+trait_drift = false
+
+[capabilities.literate]       # any [capabilities.<id>] table with these fields defines a capability
+learn_days = 120
+min_stage = "child"
+teachers = "any_holder"       # "any_holder" or a list of role ids
+needs_medium = true
+self_teach = 0.0
+enables = ["record", "read", "copy"]   # primitives this capability unlocks; verbs (config.VERBS) declare which primitive they require
+
+[capabilities.planning]       # learned skill: raises the plan step cap and horizon (plans.*_per_level); never gates legality
+learn_days = 60
+min_stage = "youth"
+teachers = "any_holder"
+needs_medium = false
+self_teach = 0.0
+enables = ["plan"]
+
+[capabilities.teach_weight]   # free keys = role ids + parent + anyone
+tutor = 4.0
+priest = 3.0
+historian = 3.0
+parent = 2.0
+anyone = 0.2
+
+[people]
+carry_cap = 30.0              # kg
+traits_per_person = 3
+memory_base = 6
+memory_per_role_weight = 6
+
+[needs]
+thresholds = { low = 0.4, critical = 0.15 }
+drift_per_day = { rest = 0.04, social = 0.01, safety = -0.02 }
+safety_hit = { witnessed_violence = 0.3, heard_violence = 0.15, contested_control = 0.05 }
+age_mult = { infant = 1.2, child = 1.2, youth = 1.0, adult = 1.0, elder = 1.6 }
+starve_days = 20
+consumption_g_per_day = 600
+
+[time.work_days]              # free keys = role ids (+ default); value = fraction or season table
+farmer = { spring = 0.8, summer = 0.6, autumn = 0.9, winter = 0.2 }
+miller = 0.6
+lord = 0.2
+default = 0.7
+
+[leisure]
+trait_weights = { pious = { rites = 3.0 }, gregarious = { socialize = 3.0, drink = 2.0 }, solitary = { rest = 2.0, craft = 2.0 } }
+edge_decay_per_day = 0.002
+edge_gain = 0.05
+kin_floor = 0.2
+quarrel_p = 0.01
+drink_quarrel_mult = 3.0
+court_private_accept = 0.5
+court_private_trait_mods = { discreet = 2.0, modest = 1.5, proud = 0.5, gregarious = 0.6 }
+court_refusal_delta = { public = -2.0, private = -1.0 }
+pending_days = 90
+
+[leisure.role_weights.naming] # free keys = role ids (+ default)
+historian = 4.0
+cartographer = 3.0
+lord = 2.0
+default = 0.05
+
+[gossip]                      # hearsay transfer (contact-v1): what a told memory is worth and who overhears it
+rate_days = 30                # D2 gossip_rate_days (legacy cadence; the contact phase runs daily, see [contact])
+crowd_fidelity = 0.8
+tell_fidelity_mult = 0.9
+hop_decay = 0.8
+overhear_p = 0.2
+
+[gossip.salience]             # free keys = "event" or "event:qualifier" (+ default); multiplies transfer p per socialize
+"died:claim_holder" = 4.0
+gathering = 2.0
+tally = 3.0
+default = 1.0
+
+[secrets.discovery]           # free keys = "event" or "event:qualifier" (concealed/private types); per-day discovery p
+killed = 0.01
+steal = 0.005
+"court:private" = 0.002
+
+[tension]
+claim_overlap = 0
+
+[resolver]
+catastrophe_scale = 1.0
+
+[resolver.base_p]             # free keys = action types; p_success overrides
+steal = 0.5
+
+[items]
+spoil_per_day = { food = 0.01 }
+granary_spoil_mult = 0.5
+
+[market]
+elasticity = 0.6
+price_cap = 8.0
+bargain = 0.7
+dear = 1.5
+mean_window_days = 90
+
+[transfer]
+default_visibility = "public"
+
+[loans]
+default_rate = 0.1
+collateral_enabled = false
+
+[hire]
+tenure_mult = [[0, 1.0], [365, 1.4], [1825, 2.0]]   # [tenure_days, multiplier] breakpoints
+
+[justice.weights]             # free keys = region ids (+ default); outcome weights for the non-model judge
+default = { dismiss = 1.0, fine = 4.0, restitution = 3.0, confine = 2.0, exile = 1.0, maim = 0.2, execute = 0.2 }
+
+[succession]
+rule = "designated"           # designated | eldest_kin | none (D1)
+mode = { lordship = "inherit", reeve = "elective", steward = "appointed" }
+
+[polity]
+enabled = true
+initial_claims = 0            # 0 = fully emergent
+control_window_days = 365
+tax_rate = 0.1
+tax_cadence_days = 90
+
+[localities]
+check_days = 90
+min_pop = 8
+min_tenure_days = 365
+harden_refs = 3
+abandon_days = 1825
+
+[stance]
+max_chars = 60
+
+[records]
+max_chars = 400
+copy_loss = 0.02
+interview_p = 0.4
+index_entries_in_context = 12
+seal_requires_item = ""       # e.g. "wax"; must be a catalog item id if set
+refill_threshold = 0.10
+
+[records.write_weight]        # free keys = role ids (+ anyone); inclination among the literate
+historian = 4.0
+merchant = 3.0
+judge = 3.0
+priest = 3.0
+steward = 3.0
+cartographer = 3.0
+lord = 1.0
+anyone = 0.05
+
+[records.auto_record]         # free keys = role ids; values = event types or ["*"]
+merchant = ["transfer"]
+judge = ["accuse", "judge"]
+priest = ["born", "died", "bond", "gathering"]
+steward = ["collect_tax", "grant", "appoint"]
+historian = ["*"]
+
+[weather]
+persistence = 0.7
+rain_mm_mean = { spring = 2.5, summer = 1.5, autumn = 2.5, winter = 2.0 }
+evaporation_mm = { spring = 1.5, summer = 3.0, autumn = 1.5, winter = 0.5 }
+moisture_capacity_mm = 300.0  # root-zone water store. worldgen-v1 finding: at 100 a wet week saturates past crop moisture_max and a dry month empties it; crops reached ~40% progress by autumn
+lightning_p = { spring = 0.0005, summer = 0.002, autumn = 0.0005, winter = 0.0 }
+wind_mean_kph = 12.0
+
+[fire]
+base_hours = 2.0              # hours to cross one cell at fuel=1, moisture=0, no wind (scaled by cell_km)
+burnout = 0.05
+min_effective_fuel = 0.25     # fuel x (1 - moisture) below this neither ignites nor carries fire (moisture of extinction).
+                              # worldgen-v1 finding: without it one spring strike at fuel .34 / moisture .50 (12 h crossings) burned 2225 of 2687 land cells and every building in 13 days
+hearth_p = 0.0005             # per building per day, x (1 - moisture)
+spot_p = 0.0
+spot_range_km = 0.0
+building_damage_per_hour = 0.25
+building_clearing = 0.3       # fraction of a cell's wild fuel removed per building sited there (yard, paths, stacked stores); fields clear hectares/cell_ha
+
+[wildlife]
+dispersal = 0.1              # fraction of each cell's animals that moves to land neighbours per day (grid-size dependent)
+raid_rate = 0.002            # per-day crop loss at raider carrying capacity x (1 - protection). worldgen-v1 finding: 0.02 over a 150-day season destroyed ~95% of every unprotected crop
+predation_rate = 0.02        # prey loss per day when a predator category is at its carrying capacity
+habitat_coupling = true      # carrying capacity follows current vegetation; false = fixed at terrain target (control only)
+prey_coupling = false        # OFF = predators ignore prey (legacy). ON = predators starve when their wildlife prey is scarce (control; uncalibrated)
+prey_satiation = 0.3         # prey fill (N/K, mean over wildlife prey) at which predators are fully fed
+starvation_rate = 0.01       # per-day fraction of predators lost when completely unfed (prey fill = 0)
+prey_refuge = false          # OFF = predators kill the same share of prey however scarce it is (legacy). ON = kill share scales with the cell's prey fill (control; uncalibrated)
+refuge_fill = 0.1            # prey fill (N/K) at and above which predators kill at the full predation_rate
+prey_response = false        # OFF = predator growth target is K whatever the prey (legacy). ON = target is K x clip(prey fill / response_fill, response_floor, 1) (control; uncalibrated)
+response_fill = 0.3          # prey fill (N/K) at which the predator target is its full K
+response_floor = 0.1         # minimum share of K the predator target can fall to
+prey_intake = false          # OFF = legacy. ON = each predator eats at most intake_cap prey/day and grows only as far as it is fed (capped functional + numerical response; control; uncalibrated). Not combinable with prey_coupling/prey_response
+intake_cap = 0.004           # max wildlife prey eaten per predator per day (prey animals)
+intake_starve = 0.005        # per-day fraction of predators lost when completely unfed
+herd_predation_p = 0.01
+
+[observation]
+obs_alpha = 0.1
+surprise_k = 1.5
+forage_bands = [0.2, 0.6]     # scarce < 0.2 <= few < 0.6 <= plenty
+
+[validator]
+conservation_sample = 1.0     # 1.0 in dev; e.g. 0.02 for long runs
+strict = true                 # true: residual raises; false: logged
+
+[agency]                      # per-person decision interface (handoff item E)
+hunt_item = "meat"            # pressure-v1: the food item a successful hunt puts in the hunter's hands
+firebreak_clear = 0.5         # share of a cell cleared of wild fuel by one firebreak action (Cells.clear)
+packet_memory_limit = 12      # most recent remembered events included in an observation packet
+action_hours = { give = 0.25, tell = 0.25, hunt = 4.0, firebreak = 3.0, say = 0.25, note = 1.0, cite = 1.0, read = 0.5, teach = 2.0 }  # charged against agriculture.activity_hours_per_day; keys = the timed verbs in config.VERBS
+
+[projects]                    # world-project-v1: durable site work; kinds and building requirements come from catalog data.
+clear_labor_hours = 8.0
+clear_fraction = 0.25
+extract_labor_hours = 8.0
+timber_per_extract = 4
+
+[plans]                       # plans-v1: a policy may answer with a PLAN (goal + ordered menu steps + assumptions) instead of one action.
+                              # The engine executes one step per day through the ordinary resolver and consults the policy again only on a BREAK.
+max_chars = 200               # goal.why free text
+goal_kinds = ["food", "shelter", "travel", "record", "social", "other"]   # closed vocabulary for goal.kind (theme data)
+base_steps = 2                # step cap and horizon for someone without any capability enabling "plan"
+base_horizon_days = 3
+steps_per_level = 4           # added per planning level (level 1 = holds a capability that enables "plan"); the engine truncates over-long plans
+horizon_days_per_level = 11
+max_assumptions = 6           # assumptions are packet paths that must hold while the plan runs (e.g. "here.place" == 3)
+surprise_events = ["died", "fire_ignited", "fire_spread", "burned", "destroyed", "found_asleep", "journey_refused", "journey_abandoned", "lodging_refused", "injured", "killed"]
+                              # a newly remembered event of one of these types breaks the plan ("surprise")
+
+[contact]                     # contact-v1: engine-side intraday phase after decisions, before sleep. Co-presence = same PLACE;
+                              # open ground in a cell is one "commons" place with a lower weight. Rolls are keyed (day, person, slot).
+slots = 2                     # contact rounds per day; each person may initiate at most one exchange per slot
+hours_per_exchange = 0.25     # charged to BOTH parties from the remaining daily activity budget
+send_cap = 2                  # exchanges a person may initiate per day
+receive_cap = 3               # exchanges (incl. overhearing) a person may receive per day
+p_base = 0.3                  # per-slot chance an initiator with company starts an exchange
+commons_mult = 0.3            # multiplier when the company is on open ground (place = -1), not inside a building
+same_household_mult = 1.5     # listener-choice weight for a household member vs 1.0 for anyone else
+
+[events.witness]              # free keys = event type or "type:flag" (a truthy payload flag). Who besides actors may remember a PUBLIC event:
+default = "place"             #   "place" = people at the same place in the cell; "cell" = anyone in the cell (visible from afar)
+fire_ignited = "cell"
+fire_spread = "cell"
+"gathering:open_air" = "cell"
+tell = "none"                 #   "none" = nobody auto-remembers, not even actors; the emitting primitive writes memory itself (hearsay record)
+
+[sleep]                       # nightly rest resolution (sleep-v1a). Rules are DATA: the engine walks tables, never names building kinds.
+reference_shelter = 6.0       # shelter value that counts as full quality (catalog shelter / reference_shelter, capped at 1)
+condition_weight = 0.5        # how much building condition (0..1) scales quality: q *= 1 - w*(1-condition)
+rest_recovery_per_quality = 0.08   # rest need recovered per night at quality 1.0 (x age_mult); a rest day also skips rest drift.
+                              # = 2 x drift: one good night clears two working days, so rest only erodes under poor sleep (q < 0.5).
+shelter_need_per_quality = 1.0     # shelter need = min(1, quality * this)
+open_air_mult = { spring = 0.5, summer = 0.7, autumn = 0.4, winter = 0.15 }   # quality multiplier when sleeping outside
+wet_mult = 0.5                # extra multiplier on a wet night (rain today)
+ration_route_margin_hours = 0.0    # journey whose estimated route exceeds hours left today + margin counts as 'needs rations'
+ration_refuse = false         # off by default: the routine household fetch sends a hungry worker to a remote granary precisely because
+                              # they carry no food. When true, such journeys are refused (journey_refused / no_rations) unless own food is carried.
+
+# Access rules, walked in ascending priority; first match wins. Fields:
+#   relation = own | household | any   (sleeper's relation to the place)
+#   affordance = building affordance the place must carry ("" = none required); min_shelter = minimum catalog shelter
+#   rent = true -> pays lodging_rate (catalog or place.room_rate) to the owner via a ledgered transfer; refused if unpayable
+#   quality = base quality before shelter/condition/open-air scaling; event = ledger event emitted on use ("" = none)
+#   witness_owner = owner's resident household are listed as actors on the event (they always remember)
+#   open_air = sleeping outside; exactly one such fallback must exist
+[sleep.access.home]
+priority = 10
+relation = "own"
+affordance = "shelter"
+quality = 1.0
+
+[sleep.access.household]
+priority = 20
+relation = "household"
+affordance = "shelter"
+quality = 1.0
+
+[sleep.access.lodging]
+priority = 30
+relation = "any"
+affordance = "lodging"
+rent = true
+quality = 0.9
+event = "transfer"
+
+[sleep.access.outbuilding]
+priority = 40
+relation = "own"
+affordance = "store"
+min_shelter = 0.0
+quality = 0.6
+
+[sleep.access.trespass]
+priority = 50
+relation = "any"
+affordance = "shelter"
+quality = 0.5
+event = "found_asleep"
+witness_owner = true
+
+[sleep.access.open]
+priority = 100
+relation = "any"
+open_air = true
+quality = 1.0
+event = "slept_rough"
+
+# Consequence rows: every matching row applies each morning. Conditions AND together.
+#   quality_below/quality_at_least on last night's quality; rest_below/rest_at_least on the rest need;
+#   seasons restricts; consecutive_nights counts nights in a row that the row's quality/season conditions held (person.sleep_streaks[row]).
+#   Effects: hours_mult scales today's activity hours; health_drain subtracts health daily and names a death cause.
+[sleep.consequences.tired]
+rest_below = 0.4
+rest_at_least = 0.15
+hours_mult = 0.75
+
+[sleep.consequences.exhausted]
+rest_below = 0.15
+hours_mult = 0.5
+
+[sleep.consequences.exposure]
+quality_below = 0.3
+seasons = ["winter", "autumn"]
+consecutive_nights = 3
+health_drain = 0.1
+cause = "exposure"
+
+[scenario]                    # pressure-v1: scripted pressure on the world. OFF by default; with enabled = false nothing here is read and every digest is unchanged.
+                              # Every effect is stateless (a function of the day) and ledgered as a 'scenario' event; day = -1 switches one effect off.
+enabled = false
+drought = { start_day = 20, days = 40, evaporation_mult = 3.0, rain_mult = 0.2 }   # scales evaporation and rain in Cells.step_weather for the window
+ignition = { day = 45, distance_cells = 3, count = 2 }                              # cells.ignite(source="scenario") on the driest cells within distance_cells of any building
+blight = { day = 90, loss = 0.5 }                                                    # planted cells lose this share of crop_health once
+stranger = { day = 30, count = 1, ration_kg = 5.0 }                                  # adults with no household arrive (at a lodging place if one exists) carrying grain
+
+[attention]
+k_per_tick = 8
+k_per_pop = 0.08
+k_cap = 40
+weights = { proximity = 1.0, deviation = 1.2, social = 0.6, role = 0.4, debt = 0.05, spark = 0.1, pull = 0.5, alarm = 2.0 }   # alarm: smoke or fire in/next to the person's cell (pressure-v1)
+decay = 0.7
+spark_p = 0.0025
+debt_norm_days = 3600
+t_named = 0.5
+scene_max_people = 5
+min_stage = "youth"           # people younger than this are never consulted (they keep the engine routine)
+
+[chroniclers]                 # YEARS (ERRATA E); derived.chronicler_ticks holds the tick values
+address_every_years = 1.0
+locality_every_years = 5.0
+region_every_years = 10.0
+country_every_years = 50.0
+person_every_years = 20.0     # if lit >= person_lit_min times; always on death
+person_lit_min = 3
+
+[chroniclers.bias_prompts]    # free keys = region ids (+ default)
+default = "plain annalist"
+
+[llm]                         # local model adapter (chronicle/llm.py): Ollama /api/chat, standard library only
+url = "http://localhost:11434"
+model = "qwen3.5:9b"          # 6.6 GB at Q4_K_M; fits a 12 GB card with room for context
+temperature = 0.8
+think = false                 # false = no <think> tokens (fast, short replies); a reasoning model needs this off for per-day decisions
+format = "schema"             # "schema" = Ollama structured output, "json" = any JSON object, "none" = free text (parsed leniently)
+timeout_s = 120.0
+retries = 2                   # extra attempts after a transport error or empty reply, with 1 s / 2 s / 4 s backoff
+num_ctx = 4096                # an observation packet is ~1k tokens; keep this small so the KV cache stays tiny
+num_predict = 300             # reply token cap (one action, or a short plan)
+keep_alive = "30m"            # keep the model loaded between days
+on_invalid = "routine"        # bad reply / error / off-menu kind: "routine" = the person's usual work, "rest" = rest. Always logged.
+max_scene_tokens = 400
+gpu_hours_budget = 40.0
+avg_scene_seconds = 3.0
+
+[prompts]
+tone = "terse, saga-like"
+custom_setup = ""
+custom_scene = ""
+custom_chronicle = ""
+exemplars_per_region = 3
+voice_rewrite_on_first_lit = true
+
+[catalog]
+enabled = "theme-default"     # or an explicit list of ids
+extra = []
+disabled = []
+proposals = true
+# Optional overlays, deep-merged onto the theme entry of the same id (or adding a complete new entry):
+# [catalog.items.<id>] [catalog.buildings.<id>] [catalog.roles.<id>] [catalog.crops.<id>]
+# [catalog.wildlife.<id>] [catalog.disease.<id>]
+
+# Uncalibrated engineering defaults; no ecology tuning in this increment.
+[agriculture]
+activity_hours_per_day = 8.0  # common budget for journeys, handling and field labor
+plant_labor_days_per_ha = 2.0
+harvest_labor_days_per_ha = 3.0
+handling_kg_per_hour = 60.0
+same_cell_place_hours = 0.25  # nonzero travel between distinct places inside a hex
+pantry_days = 7

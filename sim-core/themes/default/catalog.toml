@@ -1,0 +1,132 @@
+# Chronicle — default theme catalog v1. The engine reads FIELDS, never ids.
+# Weights kg, rates per day, prices in coin. Themes rename/reprice freely.
+
+[theme]
+name = "default"
+chronicler_voice = "plain annalist"
+
+# ---------------------------------------------------------------- roles (ERRATA 2.6)
+# workplace: building id or "none"; requires: capability ids; produces: item ids
+[roles]
+farmer       = { workplace = "farm",      requires = [], produces = ["grain"],          role_weight = 0.0, enforcement = false }
+herder       = { workplace = "pasture",   requires = [], produces = ["milk", "hide"],   role_weight = 0.0, enforcement = false }
+fisher       = { workplace = "fishery",   requires = [], produces = ["fish"],           role_weight = 0.0, enforcement = false }
+hunter       = { workplace = "none",      requires = [], produces = ["meat", "hide"],   role_weight = 0.1, enforcement = false }
+miner        = { workplace = "mine",      requires = [], produces = ["ore", "stone"],   role_weight = 0.1, enforcement = false }
+woodcutter   = { workplace = "woodlot",   requires = [], produces = ["timber"],         role_weight = 0.0, enforcement = false }
+crafter      = { workplace = "workshop",  requires = [], produces = ["tools"],          role_weight = 0.1, enforcement = false }
+mason        = { workplace = "none",      requires = [], produces = ["stone"],          role_weight = 0.2, enforcement = false }
+smith        = { workplace = "smithy",    requires = [], produces = ["tools"],          role_weight = 0.3, enforcement = false }
+miller       = { workplace = "mill",      requires = [], produces = ["flour"],          role_weight = 0.3, enforcement = false }
+papermaker   = { workplace = "workshop",  requires = [], produces = ["sheet"],          role_weight = 0.2, enforcement = false }
+merchant     = { workplace = "market",    requires = [], produces = [],                 role_weight = 0.5, enforcement = false }
+courier      = { workplace = "none",      requires = [], produces = [],                 role_weight = 0.2, enforcement = false }
+soldier      = { workplace = "none",      requires = [], produces = [],                 role_weight = 0.3, enforcement = false }
+enforcer     = { workplace = "hall",      requires = [], produces = [],                 role_weight = 0.6, enforcement = true }
+priest       = { workplace = "shrine",    requires = [], produces = [],                 role_weight = 1.0, enforcement = false }
+tutor        = { workplace = "school",    requires = ["literate"], produces = [],       role_weight = 0.4, enforcement = false }
+historian    = { workplace = "none",      requires = ["literate"], produces = [],       role_weight = 0.6, enforcement = false }
+cartographer = { workplace = "none",      requires = ["literate"], produces = [],       role_weight = 0.4, enforcement = false }
+judge        = { workplace = "hall",      requires = ["literate"], produces = [],       role_weight = 1.0, enforcement = true }
+steward      = { workplace = "hall",      requires = ["literate"], produces = [],       role_weight = 0.8, enforcement = true }
+reeve        = { workplace = "hall",      requires = [], produces = [],                 role_weight = 0.6, enforcement = true }
+lord         = { workplace = "manor",     requires = [], produces = [],                 role_weight = 2.0, enforcement = true }
+bandit       = { workplace = "none",      requires = [], produces = [],                 role_weight = 0.5, enforcement = false }
+vagrant      = { workplace = "none",      requires = [], produces = [],                 role_weight = 0.1, enforcement = false }
+
+# ---------------------------------------------------------------- items
+# kind: coin | food | material | tool | medium | livestock | vehicle
+# weight per unit (kg). food units are food_unit_g each, so weight = food_unit_g/1000.
+[items]
+coin    = { kind = "coin",      weight = 0.01, spoil_per_day = 0.0,  price = 1.0 }
+grain   = { kind = "food",      weight = 0.01, spoil_per_day = 0.001, price = 0.02 }
+flour   = { kind = "food",      weight = 0.01, spoil_per_day = 0.003, price = 0.03 }
+meat    = { kind = "food",      weight = 0.01, spoil_per_day = 0.05, price = 0.05 }
+fish    = { kind = "food",      weight = 0.01, spoil_per_day = 0.08, price = 0.04 }
+milk    = { kind = "food",      weight = 0.01, spoil_per_day = 0.2,  price = 0.03 }
+fodder  = { kind = "material",  weight = 0.01, spoil_per_day = 0.002, price = 0.005 }
+hide    = { kind = "material",  weight = 2.0,  spoil_per_day = 0.0,  price = 3.0 }
+timber  = { kind = "material",  weight = 20.0, spoil_per_day = 0.0,  price = 2.0 }
+ore     = { kind = "material",  weight = 10.0, spoil_per_day = 0.0,  price = 4.0 }
+stone   = { kind = "material",  weight = 25.0, spoil_per_day = 0.0,  price = 1.0 }
+tools   = { kind = "tool",      weight = 2.0,  spoil_per_day = 0.0,  price = 15.0 }
+wax     = { kind = "material",  weight = 0.05, spoil_per_day = 0.0,  price = 0.5 }
+wagon   = { kind = "vehicle",   weight = 150.0, spoil_per_day = 0.0, price = 120.0, carry_cap_add = 400.0 }
+cattle  = { kind = "livestock", weight = 400.0, spoil_per_day = 0.0, price = 60.0, produces = { milk = 300 }, fodder_per_day = 1000, breed_season = "spring", breed_p = 0.3 }
+sheep   = { kind = "livestock", weight = 50.0,  spoil_per_day = 0.0, price = 12.0, produces = { hide = 0.003 }, fodder_per_day = 150, breed_season = "spring", breed_p = 0.6 }
+# media (RECORDS v2): capacity in entries; decay applies outside a building with store
+sheet   = { kind = "medium", weight = 0.01, spoil_per_day = 0.0, price = 1.0,  capacity = 2,   decay_p_per_day = 0.003,  reusable = false, fireproof = false }
+ledger  = { kind = "medium", weight = 1.0,  spoil_per_day = 0.0, price = 20.0, capacity = 200, decay_p_per_day = 0.001,  reusable = false, fireproof = false }
+codex   = { kind = "medium", weight = 3.0,  spoil_per_day = 0.0, price = 80.0, capacity = 600, decay_p_per_day = 0.0005, reusable = false, fireproof = false }
+tablet  = { kind = "medium", weight = 0.3,  spoil_per_day = 0.0, price = 2.0,  capacity = 1,   decay_p_per_day = 0.001,  reusable = true,  fireproof = false }
+stele   = { kind = "medium", weight = 200.0, spoil_per_day = 0.0, price = 0.0, capacity = 6,   decay_p_per_day = 0.0,    reusable = false, fireproof = true }
+
+# ---------------------------------------------------------------- buildings
+# store (kg), shelter (people), confine_cap (people), affordances: closed verbs
+[buildings]
+house      = { terrain_allow = ["plains","forest","hills"], requires = [], store = 60.0,   shelter = 6,  confine_cap = 0, spoil_mult = 1.0, affordances = ["shelter","store"], labor_days = 40.0, materials = { timber = 4 }, decay_per_day = 0.0001, value = 30.0 }
+manor      = { terrain_allow = ["plains","forest","hills"], requires = [], store = 400.0,  shelter = 12, confine_cap = 2, spoil_mult = 1.0, affordances = ["shelter","store","enable:judge","enable:appoint"], labor_days = 400.0, materials = { timber = 20, stone = 20 }, decay_per_day = 0.00005, value = 400.0 }
+granary    = { terrain_allow = ["plains","forest","hills"], requires = [], store = 2000.0, shelter = 0,  confine_cap = 0, spoil_mult = 0.5, affordances = ["store"], labor_days = 60.0, materials = { timber = 6 }, decay_per_day = 0.0001, value = 50.0 }
+farm       = { terrain_allow = ["plains","forest"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","field"], labor_days = 20.0, materials = {}, decay_per_day = 0.0001, value = 20.0 }
+pasture    = { terrain_allow = ["plains","hills"], requires = [], store = 50.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","graze"], labor_days = 10.0, materials = {}, decay_per_day = 0.0001, value = 10.0 }
+fishery    = { terrain_allow = ["plains","forest","hills"], requires = ["water_adjacent"], store = 50.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 20.0, materials = { timber = 2 }, decay_per_day = 0.0002, value = 20.0 }
+mill       = { terrain_allow = ["plains","forest","hills"], requires = ["river_adjacent"], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:grain>flour"], labor_days = 120.0, materials = { timber = 10, stone = 6 }, decay_per_day = 0.0001, value = 120.0 }
+woodlot    = { terrain_allow = ["forest"], requires = [], store = 200.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 5.0, materials = {}, decay_per_day = 0.0001, value = 5.0 }
+mine       = { terrain_allow = ["hills","mountains"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 200.0, materials = { timber = 10 }, decay_per_day = 0.0002, value = 150.0 }
+smithy     = { terrain_allow = ["plains","forest","hills"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 60.0, materials = { timber = 4, stone = 4 }, decay_per_day = 0.0001, value = 60.0 }
+workshop   = { terrain_allow = ["plains","forest","hills"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:craft"], labor_days = 40.0, materials = { timber = 4 }, decay_per_day = 0.0001, value = 40.0 }
+market     = { terrain_allow = ["plains","forest","hills"], requires = [], store = 1000.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:trade","pool"], labor_days = 30.0, materials = { timber = 2 }, decay_per_day = 0.0002, value = 30.0 }
+warehouse  = { terrain_allow = ["plains","forest","hills"], requires = [], store = 5000.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["store"], labor_days = 100.0, materials = { timber = 12 }, decay_per_day = 0.0001, value = 100.0 }
+tavern     = { terrain_allow = ["plains","forest","hills"], requires = [], store = 100.0, shelter = 8, confine_cap = 0, spoil_mult = 1.0, affordances = ["shelter","lodging","public","enable:drink","enable:socialize"], lodging_rate = 1.0, labor_days = 60.0, materials = { timber = 6 }, decay_per_day = 0.0001, value = 60.0 }
+shrine     = { terrain_allow = ["plains","forest","hills","mountains"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:rites","enable:gathering"], labor_days = 80.0, materials = { timber = 4, stone = 8 }, decay_per_day = 0.00005, value = 80.0 }
+school     = { terrain_allow = ["plains","forest","hills"], requires = [], store = 50.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:teach"], labor_days = 60.0, materials = { timber = 6 }, decay_per_day = 0.0001, value = 60.0 }
+well       = { terrain_allow = ["plains","desert"], requires = [], store = 0.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["enable:settle_desert","enable:socialize"], labor_days = 30.0, materials = { stone = 4 }, decay_per_day = 0.00005, value = 30.0 }
+bridge     = { terrain_allow = ["plains","forest","hills"], requires = ["river"], store = 0.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["enable:cross_river"], labor_days = 150.0, materials = { timber = 10, stone = 10 }, decay_per_day = 0.0002, value = 150.0 }
+ferry      = { terrain_allow = ["plains","forest","hills"], requires = ["water_adjacent"], store = 0.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["enable:cross_water"], labor_days = 40.0, materials = { timber = 6 }, decay_per_day = 0.0003, value = 40.0 }
+post_house = { terrain_allow = ["plains","forest","hills"], requires = ["road"], store = 100.0, shelter = 4, confine_cap = 0, spoil_mult = 1.0, affordances = ["shelter","lodging","public","enable:hire:deliver"], lodging_rate = 0.5, labor_days = 50.0, materials = { timber = 5 }, decay_per_day = 0.0001, value = 50.0 }
+watchtower = { terrain_allow = ["plains","forest","hills","mountains"], requires = [], store = 20.0, shelter = 2, confine_cap = 0, spoil_mult = 1.0, affordances = ["defend"], labor_days = 100.0, materials = { timber = 4, stone = 12 }, decay_per_day = 0.00005, value = 100.0 }
+palisade   = { terrain_allow = ["plains","forest","hills"], requires = [], store = 0.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["defend","protection"], labor_days = 200.0, materials = { timber = 30 }, decay_per_day = 0.0003, value = 100.0 }
+fence      = { terrain_allow = ["plains","forest","hills"], requires = [], store = 0.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["protection"], labor_days = 15.0, materials = { timber = 3 }, decay_per_day = 0.0005, value = 10.0 }
+hall       = { terrain_allow = ["plains","forest","hills"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:judge","enable:collect_tax","enable:gathering"], labor_days = 200.0, materials = { timber = 12, stone = 12 }, decay_per_day = 0.00005, value = 200.0 }
+jail       = { terrain_allow = ["plains","forest","hills"], requires = [], store = 20.0, shelter = 0, confine_cap = 6, spoil_mult = 1.0, affordances = ["confine"], labor_days = 120.0, materials = { timber = 4, stone = 16 }, decay_per_day = 0.00005, value = 120.0 }
+
+# ---------------------------------------------------------------- crops (ECOLOGY)
+[crops]
+grain = { item = "grain", plant_season = "spring", harvest_season = "autumn", growth_days = 150, moisture_min = 0.15, moisture_optimal = 0.5, moisture_max = 0.9, yield_kg_per_ha = 800.0, hectares_per_field = 4.0, frost_loss = 0.3, stress_loss_per_day = 0.003 }
+# stress_loss_per_day: yield lost per fully moisture-stressed day (dry or waterlogged), x (1 - moisture factor).
+# worldgen-v1 finding: the former hardcoded 0.015 compounded over a 180-day season to 0.15-0.35 health on every
+# farm (moisture is never exactly optimal), so one farm fed two people and a household of four starved.
+# 0.003 ~ a 60-day full drought costs 17% of yield. Provisional, not an agronomic calibration.
+
+# ---------------------------------------------------------------- wildlife (statistical, per cell)
+# r per day; k_per_km2 at vegetation = 1; raids = eats standing crops
+[wildlife]
+game     = { r = 0.002, k_per_km2 = 20.0, diet = ["vegetation"], raids = false, hunt_yield_kg = 40.0 }
+raider   = { r = 0.004, k_per_km2 = 60.0, diet = ["vegetation", "crops"], raids = true, hunt_yield_kg = 8.0 }
+predator = { r = 0.001, k_per_km2 = 2.0,  diet = ["game", "livestock"], raids = false, hunt_yield_kg = 15.0 }
+
+# ---------------------------------------------------------------- disease (ECOLOGY)
+# hosts: wildlife ids, livestock item ids, or "people"; cross-species only where listed
+[disease.murrain]
+hosts = ["game", "cattle", "sheep"]
+routes = ["contact", "water"]
+beta = { game = 0.3, cattle = 0.2, sheep = 0.2 }
+cross = { "game>cattle" = 0.05, "game>sheep" = 0.05, "cattle>sheep" = 0.1 }
+incubation_days = 5
+infectious_days = 10
+mortality = { game = 0.4, cattle = 0.3, sheep = 0.3 }
+immunity = true
+effects = { work = 0.5, production = 0.3 }
+symptoms = ["stops eating", "staggering"]
+
+[disease.grey_cough]
+hosts = ["people"]
+routes = ["contact"]
+beta = { people = 0.15 }
+cross = {}
+incubation_days = 4
+infectious_days = 12
+mortality = { people = 0.08 }
+immunity = true
+effects = { work = 0.3, production = 0.0 }
+symptoms = ["fever", "cough", "grey pallor"]

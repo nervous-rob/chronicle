@@ -1,0 +1,11 @@
+[sweep]
+base = "run.example.toml"
+[[sweep.variants]]
+name = "dense"
+overrides = { "population.clusters" = 1, "population.cluster_weights" = [1.0] }
+[[sweep.variants]]
+name = "half-km"
+overrides = { "units.cell_km" = 0.5 }
+[[sweep.variants]]
+name = "oral"
+overrides = { "setup.literacy_scale" = 0.0 }

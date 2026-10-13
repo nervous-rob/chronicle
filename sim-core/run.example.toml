@@ -1,0 +1,12 @@
+schema_version = 2
+[run]
+name = "iron-coast-01"
+seed = 7
+years = 50
+[world]
+theme = "default"
+setup_prompt = "A cold coastline recently abandoned by an empire; old roads remain but no one maintains them."
+[population]
+initial = 120
+[records.auto_record]
+priest = ["born", "died", "bond"]

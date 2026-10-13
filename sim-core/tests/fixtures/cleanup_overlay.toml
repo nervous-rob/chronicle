@@ -1,0 +1,16 @@
+# Overlay used by tests/test_cleanup.py: a new capability that enables only `read`, a witness-scope change,
+# and a stage work multiplier change, all with zero Python changes.
+schema_version = 2
+[capabilities.lettered]
+learn_days = 30
+min_stage = "child"
+teachers = "any_holder"
+needs_medium = true
+self_teach = 0.0
+enables = ["read"]
+
+[events.witness]
+say = "cell"               # shouting: anyone in the cell may remember a public `say`
+
+[development.stage_work_mult]
+youth = 0.25
