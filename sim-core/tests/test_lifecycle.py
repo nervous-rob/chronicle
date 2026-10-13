@@ -27,10 +27,11 @@ def fixture(extra=None):
 
 check(load()['demography']['enabled'] is False,'demography is off by default')
 check(raises(lambda:load(overrides={'demography.fertile_min_years':50,'demography.fertile_max_years':40})), 'inverted fertile range rejected')
-# exact daily probability 1 means one birth (mother is the keyed subject), and assigns family links
-E,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
+# Exact daily probability conceives first; a due birth later assigns durable family links.
+E,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0,'demography.gestation_days':1})
+E.step();check(A.pregnancy=={'father':B.id,'due_day':1} and any(x.type=='conceived' and set(x.actors)=={A.id,B.id} for x in E.ledger.events),'co-resident bonded pair conceives publicly before birth')
 E.step();kids=[p for p in E.people.rows.values() if p.id not in (A.id,B.id)]
-check(len(kids)==1 and kids[0].parents==[A.id,B.id] and kids[0].household_id==0 and kids[0].sex in ('female','male'),'bonded co-resident pair creates linked child')
+check(len(kids)==1 and kids[0].parents==[A.id,B.id] and kids[0].household_id==0 and kids[0].sex in ('female','male'),'due pregnancy creates linked child')
 check(any(x.type=='born' and set(x.actors)=={kids[0].id,A.id,B.id} for x in E.ledger.events),'birth is ledgered with child and parents')
 # New bonds are public, local acts: sharing a household alone is not enough.
 P,Pa,Pb,Pf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':0.0,'demography.bond_chance_per_year':1.0})
@@ -70,11 +71,13 @@ U,Ua,Ub,Uf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0
 Ua.born_day=-60*365; Ua.spouse=Ub.spouse=None; Ua.estate_owner=True
 U.step()
 check(U.places[Ua.home_place].owner is None and all(l.owner is None for l in U.inventory.lots.values()),'estate without heir becomes unowned')
-# checkpoint preserves a newly born child and family links.
-C,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
+# Checkpoint preserves an in-progress pregnancy; reload yields the same later birth.
+C,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0,'demography.gestation_days':2})
 C.step()
 with tempfile.TemporaryDirectory() as td:
  p=Path(td)/'c.zip';C.save_checkpoint(p);R=Engine.load_checkpoint(p,expected_config=C.cfg)
- check(R.digest()==C.digest() and len(R.people.rows)==3 and R.people.rows[2].parents==[0,1],'lifecycle state checkpoint round trips')
+ check(R.digest()==C.digest() and R.people.rows[A.id].pregnancy=={'father':B.id,'due_day':2},'pregnancy state checkpoint round trips')
+ C.step();C.step();R.step();R.step()
+ check(R.digest()==C.digest() and len(R.people.rows)==3 and R.people.rows[2].parents==[0,1],'pregnancy resolves deterministically after reload')
 report={'suite':'lifecycle','checks':len(checks),'failures':[]}
 (ROOT/'test-results/lifecycle.json').write_text(json.dumps(report,indent=2));print(json.dumps(report))
