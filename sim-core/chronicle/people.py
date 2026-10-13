@@ -348,9 +348,16 @@ class People:
             group = [p for p in adults if p.household_id == hid and p.spouse is None and p.sex in ('female','male')]
             females = sorted((p for p in group if p.sex == 'female'), key=lambda p:p.id)
             males = sorted((p for p in group if p.sex == 'male'), key=lambda p:p.id)
-            for a, b in zip(females, males):
+            # A bond is a witnessed public act, not an invisible household-wide match.
+            # Pair only people at the same exact place; consume the selected partner so
+            # the result is deterministic without permitting multiple bonds per pass.
+            available = list(males)
+            for a in females:
+                b = next((q for q in available if self.co_present(a, q)), None)
+                if b is None: continue
                 if self.rng.one('bond', day, a.id).random() < self._daily_p(dm['bond_chance_per_year']):
                     a.spouse=b.id; b.spouse=a.id
+                    available.remove(b)
                     self.ledger.event(day, 'bond', [a.id,b.id], cell=a.cell, place=a.place)
         lo, hi = dm['fertile_min_years'] * 365, dm['fertile_max_years'] * 365
         mothers = [p for p in self.rows.values() if p.alive and p.sex == 'female' and p.spouse is not None and lo <= day-p.born_day <= hi]

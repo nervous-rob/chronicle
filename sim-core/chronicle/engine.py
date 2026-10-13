@@ -322,6 +322,7 @@ class Engine:
             p = self.people.rows[pid]
             if p.alive and not p.busy: self.agency.act(pid)
         self._contact_phase(d)
+        physiology_dead = []
         for pid, p in sorted(self.people.rows.items()):
             if not p.alive: continue
             quality, _rule = self._sleep_resolve(d, p)
@@ -330,10 +331,15 @@ class Engine:
                                           sleep_quality=quality, season=season_of(d))
             if ate < demand: self._record_deficit(d, pid, ate, demand)
             if p.died_day == d:
+                physiology_dead.append(pid)
                 hist = self.deprivation['by_person'].get(pid)
                 self.deprivation['deaths'][pid] = {'day': d, 'cell': p.cell, 'place': p.place,
                     'deficit_days': hist['deficit_days'] if hist else 0, 'by_cause': dict(hist['by_cause']) if hist else {},
                     'first_deficit_day': hist['first_day'] if hist else None, 'last_cause': hist['last']['cause'] if hist else None}
+        # Background deaths are succeeded before the day's work. Deaths from ordinary
+        # physiology happen at day's end, but must still hand their household routine
+        # on before tomorrow rather than leaving a farm permanently unassigned.
+        if physiology_dead: self._succession(d, physiology_dead)
         # Only action/location-grounded observations. Anonymous people update
         # expectations but get no event-memory backfill if subsequently named.
         for pid, p in sorted(self.people.rows.items()):

@@ -32,6 +32,12 @@ E,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,
 E.step();kids=[p for p in E.people.rows.values() if p.id not in (A.id,B.id)]
 check(len(kids)==1 and kids[0].parents==[A.id,B.id] and kids[0].household_id==0 and kids[0].sex in ('female','male'),'bonded co-resident pair creates linked child')
 check(any(x.type=='born' and set(x.actors)=={kids[0].id,A.id,B.id} for x in E.ledger.events),'birth is ledgered with child and parents')
+# New bonds are public, local acts: sharing a household alone is not enough.
+P,Pa,Pb,Pf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':0.0,'demography.bond_chance_per_year':1.0})
+Pa.spouse=Pb.spouse=None; Pb.place=-1
+P.step();check(Pa.spouse is None and Pb.spouse is None,'separated household adults do not form an invisible bond')
+Pb.place=Pa.place
+P.step();check(Pa.spouse==Pb.id and Pb.spouse==Pa.id,'co-present eligible adults form a public bond')
 # Off: even impossible-high birth rate leaves no child.
 O,Ao,Bo,Fo=fixture({'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
 O.step();check(len(O.people.rows)==2,'birth setting is inert while lifecycle is off')
@@ -44,6 +50,10 @@ S,Sa,Sb,Sf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0
  'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
 Sa.born_day=-60*365; Sb.born_day=-30*365
 S.step();check(not Sa.alive and S.farming.assignments.get(Sb.id)==Sf,'death hands a farm routine to qualified household survivor')
+# Non-background deaths occur during physiology; they must trigger the same next-day-safe reassignment.
+N,Na,Nb,Nf=fixture({'demography.enabled':False})
+Na.starvation=2*float(N.cfg['needs']['starve_days'])
+N.step();check(not Na.alive and N.farming.assignments.get(Nb.id)==Nf,'physiology death also hands farm routine to a household survivor')
 # checkpoint preserves a newly born child and family links.
 C,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
 C.step()
