@@ -42,6 +42,7 @@ class Person:
     expectations: dict = field(default_factory=dict)
     memory: dict = field(default_factory=dict)  # event id -> source/fidelity/day
     known_records: dict = field(default_factory=dict)
+    known_cells: dict = field(default_factory=dict)  # cell -> first-hand discovery snapshot; personal map knowledge
     disease_state: dict = field(default_factory=dict)
     goals: list = field(default_factory=list)
     busy: str | None = None
@@ -88,6 +89,8 @@ class People:
             raise PeopleError('too young for a role')
         self.inventory.register(f'p:{pid}', self.cfg['people']['carry_cap'])
         self.rows[pid] = p
+        # Being born or introduced somewhere provides durable first-hand local knowledge.
+        p.known_cells[cell] = {"day": int(day), "source": "origin"}
         for parent_id in p.parents: self.rows[parent_id].children.append(pid)
         if emit_birth:
             self.ledger.event(day, 'born', [pid] + list(p.parents), cell=cell, place=place, sex=sex)

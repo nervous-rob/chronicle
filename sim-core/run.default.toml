@@ -363,7 +363,10 @@ strict = true                 # true: residual raises; false: logged
 hunt_item = "meat"            # pressure-v1: the food item a successful hunt puts in the hunter's hands
 firebreak_clear = 0.5         # share of a cell cleared of wild fuel by one firebreak action (Cells.clear)
 packet_memory_limit = 12      # most recent remembered events included in an observation packet
-action_hours = { give = 0.25, tell = 0.25, hunt = 4.0, firebreak = 3.0, say = 0.25, note = 1.0, cite = 1.0, read = 0.5, teach = 2.0 }  # charged against agriculture.activity_hours_per_day; keys = the timed verbs in config.VERBS
+action_hours = { give = 0.25, tell = 0.25, hunt = 4.0, firebreak = 3.0, explore = 4.0, say = 0.25, note = 1.0, cite = 1.0, read = 0.5, teach = 2.0 }  # charged against agriculture.activity_hours_per_day; keys = the timed verbs in config.VERBS
+
+[exploration]                 # exploration-v1: personal, durable map knowledge; surveying moves one adjacent cell.
+survey_hours = 4.0
 
 [projects]                    # world-project-v1: durable site work; kinds and building requirements come from catalog data.
 clear_labor_hours = 8.0

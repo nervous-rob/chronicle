@@ -47,6 +47,7 @@ VERBS = {
     "hunt":  {"timed": True,  "requires": None},   # pressure-v1: Cells.sample_hunt -> carried meat, capped by carry room
     "firebreak": {"timed": True, "requires": None},
     "project": {"timed": False, "requires": None},  # pressure-v1: Cells.clear on the person's own cell (removes wild fuel)
+    "explore": {"timed": True, "requires": None},   # survey one adjacent, personally unknown cell
     "say":   {"timed": True,  "requires": None},
     "tell":  {"timed": True,  "requires": None},   # memory-v1: pass one remembered event to a co-present person (people.tell, ledgered hearsay)
     "note":  {"timed": True,  "requires": "record"},
@@ -550,6 +551,10 @@ def _validate(raw: dict, cat: dict) -> None:
         raise ConfigError(f"attention.min_stage must be one of {sorted(raw['stages'])}")
     for k in ("deviation", "social", "role", "debt", "alarm"):
         _req(raw["attention"]["weights"], k, float, "attention.weights", 0.0, 1000.0)
+
+    # ---- exploration-v1: personal map survey duration
+    ex = raw["exploration"]
+    _req(ex, "survey_hours", float, "exploration", 0.000001, raw["agriculture"]["activity_hours_per_day"])
 
     # ---- pressure-v1: agency verbs that need parameters, and the off-by-default scenario schedule
     ag2 = raw["agency"]

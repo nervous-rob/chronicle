@@ -299,6 +299,7 @@ class Agency:
                      'surroundings': plain(e.cells.visible(p.cell)), 'company': company, 'places': places},
             'at_hand': at_hand, 'media': media, 'memory': memory,
             'records_known': [{'medium': lid, 'last_seen_cell': c} for lid, c in sorted(p.known_records.items())],
+            'map': {'known_cells': sorted(p.known_cells), 'knowledge': plain(p.known_cells)},
             'beliefs': {k: {'mean': round(v[0], 4), 'samples': v[2]} for k, v in sorted(p.expectations.items())},
         }
         plan = self.plans.get(pid)
@@ -355,6 +356,18 @@ class Agency:
         if p.id in self.e.farming.journeys: return None
         offers=self.e.projects.offers(p)
         return {'kind':'project','offers':offers} if offers else None
+    def _offer_explore(self, p, **_):
+        e = self.e
+        if p.id in e.farming.journeys: return None
+        survey = float(e.cfg['exploration']['survey_hours'])
+        edges = e.world.edge_hours(season_of(e.day), injured=p.needs['health'] < e.cfg['needs']['thresholds']['low'])
+        cells = []
+        for k, cell in enumerate(e.world.neighbors(p.cell)):
+            cell = int(cell)
+            if cell < 0 or cell in p.known_cells: continue
+            travel = float(edges[p.cell, k])
+            if math.isfinite(travel) and travel + survey <= e.farming.budgets[p.id] + 1e-7: cells.append(cell)
+        return {'kind': 'explore', 'cells': cells, 'survey_hours': survey} if cells else None
     def _offer_firebreak(self, p, **_):
         c = self.e.cells
         if p.id in self.e.farming.journeys or bool(c.burning[p.cell]) or float(c.cleared[p.cell]) >= 0.999: return None
@@ -497,6 +510,22 @@ class Agency:
             ok=any(x.get('kind')==kind and (kind not in ('build','repair') or x.get('building')==building) and (kind!='repair' or x.get('target_place')==target) for x in entry['offers'])
             if not ok: return False, 'not_on_menu'
         self.e.projects.work(p,a); return True, None
+    def _do_explore(self, p, a, entry):
+        e = self.e; target = a.get('cell')
+        if type(target) is not int or target not in entry['cells']: return False, 'not_on_menu'
+        origin, origin_place = p.cell, p.place; neighbors = list(e.world.neighbors(origin)); k = neighbors.index(target)
+        edges = e.world.edge_hours(season_of(e.day), injured=p.needs['health'] < e.cfg['needs']['thresholds']['low'])
+        travel = float(edges[origin, k]); total = travel + float(e.cfg['exploration']['survey_hours'])
+        if not math.isfinite(travel) or e.farming.budgets[p.id] + 1e-7 < total: return False, 'unreachable'
+        e.ledger.event(e.day, 'departed', [p.id], cell=origin, place=origin_place, target_cell=target, purpose='explore')
+        e.farming._spend(p.id, total, 'explore'); p.cell = target; p.place = -1
+        e.ledger.event(e.day, 'passed_through', [p.id], cell=target, target_cell=target, purpose='explore')
+        from .world import T
+        terrain = next(name for name, code in T.items() if code == int(e.world.terrain[target]))
+        p.known_cells[target] = {'day': e.day, 'source': 'survey', 'terrain': terrain, 'visible': plain(e.cells.visible(target))}
+        e.ledger.event(e.day, 'discovered', [p.id], cell=target, place=-1, discovery='cell', terrain=terrain)
+        e.ledger.event(e.day, 'arrived', [p.id], cell=target, place=-1, travel_hours=travel, purpose='explore')
+        return True, None
     def _do_firebreak(self, p, a, entry):
         e = self.e; hours = self._timed(p.id, 'firebreak'); frac = e.cfg['agency']['firebreak_clear']
         e.cells.clear([p.cell], frac)
