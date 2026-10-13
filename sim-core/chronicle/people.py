@@ -410,8 +410,14 @@ class People:
         return dead
 
     def inherit_role(self, day, p):
-        """At youth, inherit a parent role only when its existing capability gate is met."""
-        if p.role is not None or not p.parents: return False
+        """At adulthood, inherit a viable parent role when its capability gate is met.
+
+        Childhood and youth may retain legacy/setup roles, but people born during the
+        simulation receive no automatic economic role until their adult transition.
+        A failed inheritance roll or missing prerequisite deliberately leaves the
+        adult roleless rather than granting fictional competence.
+        """
+        if not self.at_least(p, day, 'adult') or p.role is not None or not p.parents: return False
         parent = next((self.rows.get(pid) for pid in p.parents if self.rows.get(pid) and self.rows[pid].role), None)
         if parent is None: return False
         if self.rng.one('role-inherit', day, p.id).random() >= self.cfg['development']['role_inherit_p']: return False
@@ -499,7 +505,7 @@ class People:
         if stage != p.stage_seen:
             self.ledger.event(day, 'stage', [pid], cell=p.cell, place=p.place, stage=stage)
             p.stage_seen = stage
-            if stage == 'youth' and self.cfg['demography']['enabled']: self.inherit_role(day, p)
+            if stage == 'adult' and self.cfg['demography']['enabled']: self.inherit_role(day, p)
         if p.needs['health'] <= 1e-12:
             p.needs['health'] = 0.; self.end_pregnancy(day, p, 'mother_died'); p.died_day = day
             # Cause: starvation when the nutrition cap closed; otherwise the draining consequence row's label.
