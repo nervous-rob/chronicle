@@ -279,7 +279,7 @@ class Engine:
                 self.ledger.event(d, 'arrived', [p.id], cell=anchor.cell, place=p.place, source='scenario')
             ev(d, 'scenario', visibility='private', kind='stranger', arrived=int(st['count']))
 
-    def _heir(self, dead):
+    def _heir(self, day, dead):
         """Deterministic personal succession: named heir, spouse, eldest child, then kin.
         This deliberately chooses a living person rather than silently retaining a dead owner key.
         """
@@ -287,7 +287,10 @@ class Engine:
         people = self.people.rows
         def alive(pid):
             q = people.get(pid)
-            return q if q is not None and q.alive else None
+            # A dependent can be named or related, but cannot receive an estate.
+            # This keeps legacy meaningful: a child becomes an eligible heir only
+            # after their public adult-stage transition.
+            return q if q is not None and q.alive and self.people.at_least(q, day, 'adult') else None
         named = alive(dead.designated_heir) if dead.designated_heir is not None else None
         if named is not None: return named
         spouse = alive(dead.spouse) if dead.spouse is not None else None
@@ -306,7 +309,7 @@ class Engine:
         """Transfer a dead person's own estate, and a seeded household estate when they head it.
         Ownership changes but custody does not: stock stays in its real physical holder.
         """
-        heir = self._heir(dead)
+        heir = self._heir(day, dead)
         target = f'p:{heir.id}' if heir is not None else None
         owner_keys = {f'p:{dead.id}'}
         if dead.estate_owner and dead.household_id is not None: owner_keys.add(f'h:{dead.household_id}')

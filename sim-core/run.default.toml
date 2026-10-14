@@ -101,6 +101,7 @@ death_base_per_year = 0.025
 enabled = false
 fertile_min_years = 18
 fertile_max_years = 40
+gestation_days = 280
 bond_chance_per_year = 0.20
 # Relative to population.death_base_per_year; deliberately a coarse lifecycle, not calibration.
 mortality_mult = { infant = 3.0, child = 0.4, youth = 0.35, adult = 1.0, elder = 5.0 }

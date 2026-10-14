@@ -27,11 +27,33 @@ def fixture(extra=None):
 
 check(load()['demography']['enabled'] is False,'demography is off by default')
 check(raises(lambda:load(overrides={'demography.fertile_min_years':50,'demography.fertile_max_years':40})), 'inverted fertile range rejected')
-# exact daily probability 1 means one birth (mother is the keyed subject), and assigns family links
-E,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
+# Exact daily probability conceives first; a due birth later assigns durable family links.
+E,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0,'demography.gestation_days':1})
+E.step();check(A.pregnancy=={'father':B.id,'due_day':1} and any(x.type=='conceived' and set(x.actors)=={A.id,B.id} for x in E.ledger.events),'co-resident bonded pair conceives publicly before birth')
 E.step();kids=[p for p in E.people.rows.values() if p.id not in (A.id,B.id)]
-check(len(kids)==1 and kids[0].parents==[A.id,B.id] and kids[0].household_id==0 and kids[0].sex in ('female','male'),'bonded co-resident pair creates linked child')
+check(len(kids)==1 and kids[0].parents==[A.id,B.id] and kids[0].household_id==0 and kids[0].sex in ('female','male'),'due pregnancy creates linked child')
 check(any(x.type=='born' and set(x.actors)=={kids[0].id,A.id,B.id} for x in E.ledger.events),'birth is ledgered with child and parents')
+# A born child remains roleless through youth, then crosses adulthood publicly and may
+# inherit a parent role only at that point.  The test moves the clock-age directly so
+# the transition, rather than twenty simulated years of unrelated physics, is isolated.
+G,Ga,Gb,Gf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':0.0,
+                     'development.role_inherit_p':1.0})
+child=G.add_person(G.day,Gb.cell,Gb.place,household_id=0,name='Cora',sex='female',parents=(Ga.id,Gb.id),emit_birth=True)
+child.stage_seen='youth'; child.born_day=G.day-20*365
+G.step()
+check(child.role=='farmer' and child.role_since_day==G.day-1 and any(x.type=='stage' and x.actors==(child.id,) and x.payload.get('stage')=='adult' for x in G.ledger.events),'born child becomes an adult publicly and then inherits a viable parent role')
+# The pending adulthood handoff is durable across a day-boundary checkpoint.
+H,Ha,Hb,Hf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':0.0,
+                     'development.role_inherit_p':1.0})
+teen=H.add_person(H.day,Hb.cell,Hb.place,household_id=0,name='Eli',sex='male',parents=(Ha.id,Hb.id),emit_birth=True)
+teen.stage_seen='youth'; teen.born_day=H.day-20*365+1
+# Checkpoint only exists at a completed day boundary. Advance while Eli is still youth;
+# the following day is the adulthood transition in both original and reloaded engines.
+H.step()
+with tempfile.TemporaryDirectory() as td:
+ q=Path(td)/'adult.zip';H.save_checkpoint(q);J=Engine.load_checkpoint(q,expected_config=H.cfg)
+ H.step();J.step()
+ check(H.digest()==J.digest() and J.people.rows[teen.id].role=='farmer','pending adulthood handoff resolves deterministically after reload')
 # New bonds are public, local acts: sharing a household alone is not enough.
 P,Pa,Pb,Pf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':0.0,'demography.bond_chance_per_year':1.0})
 Pa.spouse=Pb.spouse=None; Pb.place=-1
@@ -64,17 +86,27 @@ I.step()
 owned_lots=[l for l in I.inventory.lots.values() if l.owner==f'p:{heir.id}']
 check(not Ia.alive and I.places[Ia.home_place].owner==f'p:{heir.id}' and I.farming.farms[If].owner==f'p:{heir.id}' and owned_lots and any(l.holder==f'b:{I.farming.farms[If].store}' for l in owned_lots) and all(l.holder in {f'b:{I.farming.farms[If].store}',f'b:{I.farming.farms[If].home}'} for l in owned_lots) and I.farming.assignments.get(heir.id)==If,'designated heir receives estate, preserves custody, and can continue farm work')
 check(any(x.type=='transfer' and x.payload.get('estate') and x.payload.get('owner_to')==f'p:{heir.id}' for x in I.ledger.events),'estate succession is publicly ledgered')
+# A dependent may be designated, but cannot take an estate before adulthood; the next
+# qualified successor (the spouse here) receives it instead.
+M,Ma,Mb,Mf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
+ 'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
+minor=M.add_person(M.day,Ma.cell,Ma.place,household_id=0,name='Dara',sex='female',parents=(Ma.id,Mb.id),emit_birth=True)
+Ma.born_day=-60*365; Ma.designated_heir=minor.id; Ma.estate_owner=True
+M.step()
+check(not Ma.alive and M.places[Ma.home_place].owner==f'p:{Mb.id}','dependent designated heir waits; qualified spouse receives the estate')
 # With no qualifying relation, the estate is explicitly unowned rather than permanently dead-owned.
 U,Ua,Ub,Uf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
  'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
 Ua.born_day=-60*365; Ua.spouse=Ub.spouse=None; Ua.estate_owner=True
 U.step()
 check(U.places[Ua.home_place].owner is None and all(l.owner is None for l in U.inventory.lots.values()),'estate without heir becomes unowned')
-# checkpoint preserves a newly born child and family links.
-C,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0})
+# Checkpoint preserves an in-progress pregnancy; reload yields the same later birth.
+C,A,B,F=fixture({'demography.enabled':True,'population.birth_rate_per_year':1.0,'population.death_base_per_year':0.0,'demography.gestation_days':2})
 C.step()
 with tempfile.TemporaryDirectory() as td:
  p=Path(td)/'c.zip';C.save_checkpoint(p);R=Engine.load_checkpoint(p,expected_config=C.cfg)
- check(R.digest()==C.digest() and len(R.people.rows)==3 and R.people.rows[2].parents==[0,1],'lifecycle state checkpoint round trips')
+ check(R.digest()==C.digest() and R.people.rows[A.id].pregnancy=={'father':B.id,'due_day':2},'pregnancy state checkpoint round trips')
+ C.step();C.step();R.step();R.step()
+ check(R.digest()==C.digest() and len(R.people.rows)==3 and R.people.rows[2].parents==[0,1],'pregnancy resolves deterministically after reload')
 report={'suite':'lifecycle','checks':len(checks),'failures':[]}
 (ROOT/'test-results/lifecycle.json').write_text(json.dumps(report,indent=2));print(json.dumps(report))

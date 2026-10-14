@@ -33,6 +33,8 @@ class Person:
     parents: list = field(default_factory=list)
     spouse: int | None = None
     children: list = field(default_factory=list)
+    # None, or a durable conception record: father id and the day birth becomes due.
+    pregnancy: dict | None = None
     designated_heir: int | None = None
     estate_owner: bool = False  # seeded household head; its household estate follows personal succession
     capabilities: set = field(default_factory=set)
@@ -335,10 +337,20 @@ class People:
     def _daily_p(self, annual):
         return 1.0 - (1.0 - float(annual)) ** (1.0 / 365.0)
 
+    def end_pregnancy(self, day, mother, cause):
+        """Resolve a pregnancy that cannot continue, without creating an unparented child."""
+        if mother.pregnancy is None:
+            return False
+        father = mother.pregnancy['father']
+        mother.pregnancy = None
+        self.ledger.event(day, 'pregnancy_lost', [mother.id, father], cell=mother.cell,
+                          place=mother.place, cause=cause)
+        return True
+
     def lifecycle(self, day):
-        """Apply background mortality, pair unbonded co-resident adults, and create births.
-        Returns ids that died before the ordinary daily physiology pass. Every random draw is
-        keyed by (process, day, person) so unrelated population changes do not shift outcomes."""
+        """Apply mortality, public bonds, conception, and due births.
+        Pregnancies are explicit state rather than same-day births. Every random draw is keyed
+        by (process, day, person), so unrelated population changes do not shift outcomes."""
         dm = self.cfg['demography']
         if not dm['enabled']: return []
         dead = []
@@ -348,6 +360,7 @@ class People:
             stage = self.stage(p, day)
             annual = self.cfg['population']['death_base_per_year'] * dm['mortality_mult'][stage]
             if self.rng.one('background-mortality', day, pid).random() < self._daily_p(annual):
+                self.end_pregnancy(day, p, 'mother_died')
                 p.died_day = day; p.needs['health'] = 0.; p.last_day = day
                 self.ledger.event(day, 'died', [pid], cell=p.cell, place=p.place, cause='background')
                 dead.append(pid)
@@ -368,21 +381,46 @@ class People:
                     a.spouse=b.id; b.spouse=a.id
                     available.remove(b)
                     self.ledger.event(day, 'bond', [a.id,b.id], cell=a.cell, place=a.place)
+        # Resolve due births before attempting new conceptions. Father identity is retained
+        # from conception even if the father subsequently dies; the child remains linked to both.
+        for mother in sorted(self.rows.values(), key=lambda p:p.id):
+            pregnancy = mother.pregnancy
+            if not mother.alive or pregnancy is None or day < pregnancy['due_day']:
+                continue
+            father = self.rows.get(pregnancy['father'])
+            if father is None:
+                self.end_pregnancy(day, mother, 'missing_father')
+                continue
+            sex = 'female' if self.rng.one('birth-sex', day, mother.id).random() < .5 else 'male'
+            child = self.add(day, mother.cell, mother.place, day=day, household_id=mother.household_id,
+                             name=f'Child{len(self.rows)}', sex=sex, parents=(mother.id, father.id), emit_birth=True)
+            child.home_place = mother.home_place
+            mother.pregnancy = None
+            child.needs['food'] = 1.0
         lo, hi = dm['fertile_min_years'] * 365, dm['fertile_max_years'] * 365
-        mothers = [p for p in self.rows.values() if p.alive and p.sex == 'female' and p.spouse is not None and lo <= day-p.born_day <= hi]
+        mothers = [p for p in self.rows.values() if p.alive and p.sex == 'female' and p.spouse is not None
+                   and p.pregnancy is None and lo <= day-p.born_day <= hi]
         for mother in sorted(mothers, key=lambda p:p.id):
             father = self.rows.get(mother.spouse)
-            if father is None or not father.alive or father.household_id != mother.household_id or father.cell != mother.cell: continue
-            if self.rng.one('birth', day, mother.id).random() >= self._daily_p(self.cfg['population']['birth_rate_per_year']): continue
-            sex = 'female' if self.rng.one('birth-sex', day, mother.id).random() < .5 else 'male'
-            child = self.add(day, mother.cell, mother.home_place, day=day, household_id=mother.household_id,
-                             name=f'Child{len(self.rows)}', sex=sex, parents=(mother.id,father.id), emit_birth=True)
-            child.needs['food'] = 1.0
+            # Conception, like a bond, is local rather than an invisible household-wide effect.
+            if father is None or not father.alive or father.household_id != mother.household_id or not self.co_present(mother, father):
+                continue
+            if self.rng.one('conception', day, mother.id).random() >= self._daily_p(self.cfg['population']['birth_rate_per_year']):
+                continue
+            mother.pregnancy = {'father': father.id, 'due_day': day + dm['gestation_days']}
+            self.ledger.event(day, 'conceived', [mother.id, father.id], cell=mother.cell, place=mother.place,
+                              due_day=mother.pregnancy['due_day'])
         return dead
 
     def inherit_role(self, day, p):
-        """At youth, inherit a parent role only when its existing capability gate is met."""
-        if p.role is not None or not p.parents: return False
+        """At adulthood, inherit a viable parent role when its capability gate is met.
+
+        Childhood and youth may retain legacy/setup roles, but people born during the
+        simulation receive no automatic economic role until their adult transition.
+        A failed inheritance roll or missing prerequisite deliberately leaves the
+        adult roleless rather than granting fictional competence.
+        """
+        if not self.at_least(p, day, 'adult') or p.role is not None or not p.parents: return False
         parent = next((self.rows.get(pid) for pid in p.parents if self.rows.get(pid) and self.rows[pid].role), None)
         if parent is None: return False
         if self.rng.one('role-inherit', day, p.id).random() >= self.cfg['development']['role_inherit_p']: return False
@@ -470,9 +508,9 @@ class People:
         if stage != p.stage_seen:
             self.ledger.event(day, 'stage', [pid], cell=p.cell, place=p.place, stage=stage)
             p.stage_seen = stage
-            if stage == 'youth' and self.cfg['demography']['enabled']: self.inherit_role(day, p)
+            if stage == 'adult' and self.cfg['demography']['enabled']: self.inherit_role(day, p)
         if p.needs['health'] <= 1e-12:
-            p.needs['health'] = 0.; p.died_day = day
+            p.needs['health'] = 0.; self.end_pregnancy(day, p, 'mother_died'); p.died_day = day
             # Cause: starvation when the nutrition cap closed; otherwise the draining consequence row's label.
             cause = 'starvation' if cap <= 1e-12 or drain <= 0 else drain_cause
             self.ledger.event(day, 'died', [pid], cell=p.cell, place=p.place, cause=cause)

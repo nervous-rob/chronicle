@@ -59,7 +59,7 @@ VERBS = {
 
 # Event types the engine emits (ledger).  auto_record / salience / discovery keys must be in here.
 EVENT_TYPES = frozenset("""
-born died bond unbond role_changed moved_home named stage
+born conceived pregnancy_lost died bond unbond role_changed moved_home named stage
 departed arrived passed_through encountered journey_abandoned journey_refused
 built repaired decayed destroyed burned
 transfer hired paid default contract_done
@@ -389,6 +389,7 @@ def _validate(raw: dict, cat: dict) -> None:
     dm = raw["demography"]
     if not isinstance(dm["enabled"], bool): raise ConfigError("demography.enabled must be bool")
     _req(dm, "fertile_min_years", int, "demography", 0, 120)
+    _req(dm, "gestation_days", int, "demography", 1, 730)
     _req(dm, "fertile_max_years", int, "demography", 0, 120)
     if dm["fertile_max_years"] < dm["fertile_min_years"]: raise ConfigError("demography fertile range inverted")
     _req(dm, "bond_chance_per_year", (int, float), "demography", 0.0, 1.0)
