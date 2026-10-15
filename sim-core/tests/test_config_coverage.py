@@ -22,7 +22,7 @@ PENDING={
  'leisure':'non-rest leisure (socialize/drink/rites/courtship) not implemented',
  'secrets':'concealed-event discovery not implemented',
  'tension':'claim overlap pressure not implemented',
- 'resolver':'conflict resolver (steal/confront) not implemented',
+ 'resolver':'general conflict resolver (confront) not implemented; scarcity theft is separate',
  'market':'trade not implemented',
  'loans':'credit not implemented',
  'hire':'wage labor not implemented',

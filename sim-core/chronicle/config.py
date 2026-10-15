@@ -60,7 +60,7 @@ VERBS = {
 # Event types the engine emits (ledger).  auto_record / salience / discovery keys must be in here.
 EVENT_TYPES = frozenset("""
 born conceived pregnancy_lost died bond unbond role_changed moved_home named stage
-departed arrived passed_through encountered journey_abandoned journey_refused
+departed arrived passed_through encountered journey_abandoned journey_refused migrated
 built repaired decayed destroyed burned
 transfer hired paid default contract_done
 say tell confess heard discovered
@@ -536,6 +536,10 @@ def _validate(raw: dict, cat: dict) -> None:
     th = raw["needs"]["thresholds"]
     if not (0 < th["critical"] < th["low"] < 1):
         raise ConfigError("needs.thresholds: 0 < critical < low < 1")
+    sc = raw["scarcity"]
+    if not isinstance(sc["enabled"], bool) or not isinstance(sc["theft_enabled"], bool):
+        raise ConfigError("scarcity.enabled/theft_enabled must be bool")
+    _req(sc, "theft_hours", float, "scarcity", 0.0, raw["agriculture"]["activity_hours_per_day"])
     hb = raw["hire"]["tenure_mult"]
     if any(b[0] <= a[0] for a, b in zip(hb, hb[1:])) or hb[0][0] != 0:
         raise ConfigError("hire.tenure_mult breakpoints must start at 0 and increase")

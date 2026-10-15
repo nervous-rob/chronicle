@@ -193,6 +193,13 @@ age_mult = { infant = 1.2, child = 1.2, youth = 1.0, adult = 1.0, elder = 1.6 }
 starve_days = 20
 consumption_g_per_day = 600
 
+[scarcity]
+enabled = true
+# A hungry person first tries to reach their own food at another local place.  If that fails,
+# they may take one day's ration from a co-located foreign store, spending this many hours.
+theft_enabled = true
+theft_hours = 0.5
+
 [time.work_days]              # free keys = role ids (+ default); value = fraction or season table
 farmer = { spring = 0.8, summer = 0.6, autumn = 0.9, winter = 0.2 }
 miller = 0.6

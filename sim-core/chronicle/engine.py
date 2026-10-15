@@ -110,6 +110,94 @@ class Engine:
             # Surviving goods remain salvageable at their original physical holder.
             self.inventory.holders[f'b:{place.id}'].store = False
 
+    def _resolve_scarcity(self, d):
+        """Cheap, physical critical-hunger outcomes before discretionary agency.
+
+        A person marked critical after yesterday's meal first tries to travel to an
+        intact building holding food they already own (or their household owns).
+        This is migration in the bounded harness: it changes their actual location,
+        consumes ordinary route time, and never teleports stock or grants rights.
+        If no such move is available, they may take one day's ration from the
+        foreign store at their exact current place.  The taking is concealed;
+        inventory conservation and the transfer event remain authoritative.
+        """
+        if not self.cfg['scarcity']['enabled']:
+            return
+        demand = self.cfg.derived['consumption_units_per_day']
+        for pid, p in sorted(self.people.rows.items()):
+            if not p.alive or not p.migrate:
+                continue
+            # Assigned farm workers and household keepers already have a physical,
+            # durable food-logistics routine.  In particular, a worker may have a
+            # temporary meal deficit while travelling to that routine's remote
+            # store; treating that ordinary commute as emigration hijacks their
+            # assignment and can prevent the household from producing.  Scarcity
+            # resolution is the fallback for people without such a routine.
+            if pid in self.farming.assignments or pid in self.farming.keepers:
+                continue
+            owners = self.people.owners(p)
+            # Migration only targets food the person may legitimately eat once
+            # physically present.  A route can continue across days via Farming.
+            targets = set()
+            for lot in self.inventory.lots.values():
+                if (self.cfg.item(lot.item)['kind'] == 'food' and lot.owner in owners
+                        and lot.holder.startswith('b:')):
+                    bid = int(lot.holder[2:]); place = self.places.get(bid)
+                    if place is not None and place.destroyed_day is None and place.cell != p.cell:
+                        targets.add(bid)
+            if targets and pid not in self.farming.journeys:
+                ranked = []
+                for bid in sorted(targets):
+                    hours, _path, _edges = self.farming._route(pid, bid)
+                    if math.isfinite(hours): ranked.append((hours, bid))
+                if ranked:
+                    _hours, bid = min(ranked, key=lambda row: (row[0], row[1]))
+                    before = (p.cell, p.place)
+                    arrived = self.farming.move(pid, bid)
+                    launched = arrived or pid in self.farming.journeys
+                    if launched:
+                        # Record migration at the committed departure, even when a
+                        # physical route takes several days to complete.
+                        self.ledger.event(d, 'migrated', [pid], cell=p.cell, place=p.place,
+                                          from_cell=before[0], from_place=before[1], target=bid,
+                                          arrived=arrived, reason='critical_food')
+                    # Movement is the priority response; do not also steal today.
+                    if launched:
+                        continue
+            if not self.cfg['scarcity']['theft_enabled'] or pid in self.farming.journeys:
+                continue
+            hours = float(self.cfg['scarcity']['theft_hours'])
+            if self.farming.budgets.get(pid, 0.) + 1e-8 < hours or p.place < 0:
+                continue
+            holder = f'b:{p.place}'
+            place = self.places.get(p.place)
+            if place is None or place.destroyed_day is not None or place.cell != p.cell:
+                continue
+            foreign = [lot for lot in self.inventory.lots.values()
+                       if lot.holder == holder and lot.owner not in owners
+                       and self.cfg.item(lot.item)['kind'] == 'food']
+            if not foreign:
+                continue
+            capacity = max(0., self.cfg['people']['carry_cap'] - self.inventory.weight(f'p:{pid}'))
+            legs, remaining = [], min(demand, int(capacity / max(1e-12, self.cfg.item(foreign[0].item)['weight'])))
+            thief_owner = f'h:{p.household_id}' if p.household_id is not None else f'p:{pid}'
+            for lot in sorted(foreign, key=lambda x: (-self.cfg.item(x.item)['spoil_per_day'], x.id)):
+                q = min(remaining, lot.qty)
+                if q:
+                    legs.append(Leg(lot.id, q, f'p:{pid}', thief_owner)); remaining -= q
+                if not remaining:
+                    break
+            if not legs:
+                continue
+            eid, moved = self.inventory.transfer(d, legs, actors=(pid,), cell=p.cell, place=p.place,
+                                                 visibility='concealed', reason='steal')
+            qty = sum(self.inventory.lots[lid].qty for lid in moved)
+            self.ledger.event(d, 'steal', [pid], cell=p.cell, place=p.place, visibility='concealed',
+                              transfer=eid, quantity=qty, reason='critical_food')
+            self.people.witness(d, pid, eid)
+            self.people.witness(d, pid, len(self.ledger.events) - 1)
+            self.farming._spend(pid, hours, 'steal')
+
     def _record_deficit(self, d, pid, ate, demand):
         """Classify why a person ate less than demand today, from physical facts only:
         what their household owns and where it physically is relative to their reach."""
@@ -371,6 +459,7 @@ class Engine:
             self.inventory.burn(d, f'c:{int(cell)}')
         self.inventory.decay(d, self.rng)
         self.farming.step(d)
+        self._resolve_scarcity(d)
         # Policy-controlled people decide once, after routine households, inside the
         # same activity budget. Rejected actions cost nothing and never fail the day.
         for pid in sorted(self.agency.agents):
