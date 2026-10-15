@@ -94,6 +94,24 @@ minor=M.add_person(M.day,Ma.cell,Ma.place,household_id=0,name='Dara',sex='female
 Ma.born_day=-60*365; Ma.designated_heir=minor.id; Ma.estate_owner=True
 M.step()
 check(not Ma.alive and M.places[Ma.home_place].owner==f'p:{Mb.id}','dependent designated heir waits; qualified spouse receives the estate')
+# Kin succession traverses the full parent/child graph, not only a parent or sibling.
+# Here Ada's parent is dead, but that parent has a living sister through Ada's dead grandparent.
+K,Ka,Kb,Kf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
+ 'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
+parent=K.add_person(-65*365,Ka.cell,Ka.place,household_id=7,name='Parent',sex='male',role='farmer')
+grand=K.add_person(-90*365,Ka.cell,Ka.place,household_id=7,name='Grand',sex='female',role='farmer')
+aunt=K.add_person(-40*365,Ka.cell,Ka.place,household_id=7,name='Aunt',sex='female',role='farmer')
+parent.died_day=-1; grand.died_day=-1
+Ka.parents=[parent.id]; parent.children=[Ka.id]; parent.parents=[grand.id]; grand.children=[parent.id,aunt.id]; aunt.parents=[grand.id]
+Ka.born_day=-60*365; Ka.spouse=Kb.spouse=None; Ka.estate_owner=True
+K.step()
+check(not Ka.alive and K.places[Ka.home_place].owner==f'p:{aunt.id}','nearest eligible blood kin inherits beyond parent/sibling fallback')
+# Death dissolves a reciprocal bond after succession, leaving the survivor free for a later public bond.
+W,Wa,Wb,Wf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
+ 'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
+Wa.born_day=-60*365; Wa.estate_owner=True
+W.step()
+check(not Wa.alive and Wb.spouse is None and any(x.type=='unbond' and x.payload.get('cause')=='death' for x in W.ledger.events),'death dissolves the surviving spouse bond after estate succession')
 # With no qualifying relation, the estate is explicitly unowned rather than permanently dead-owned.
 U,Ua,Ub,Uf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
  'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})

@@ -10,7 +10,7 @@ Policy-controlled people (agency.py) choose one menu action per day; the engine 
 Nightly sleep is resolved by walking the [sleep.access] rules in config (sleep-v1a): the engine
 never names a building kind; quality flows into people.step_person and the morning consequence rows.
 Still pending: non-rest leisure, other production, trade,
-family demography, succession, diseases in people/herds, building damage model,
+family demography and succession beyond the bounded lifecycle slice, diseases in people/herds, building damage model,
 chroniclers/attention. Versioned day-boundary checkpoints are in checkpoint.py. Do not use a long run
 of this harness as evidence for a calibrated self-sustaining society.
 """
@@ -367,31 +367,69 @@ class Engine:
                 self.ledger.event(d, 'arrived', [p.id], cell=anchor.cell, place=p.place, source='scenario')
             ev(d, 'scenario', visibility='private', kind='stranger', arrived=int(st['count']))
 
-    def _heir(self, day, dead):
-        """Deterministic personal succession: named heir, spouse, eldest child, then kin.
-        This deliberately chooses a living person rather than silently retaining a dead owner key.
+    def _eligible_heir(self, day, pid):
+        """Return an adult, living heir candidate or None.
+
+        Relationship data is deliberately sparse (parent/child links plus a public
+        bond), so eligibility is one small reusable rule rather than a special case
+        for every kin term.
         """
-        if self.cfg['succession']['rule'] == 'none': return None
+        q = self.people.rows.get(pid)
+        return q if q is not None and q.alive and self.people.at_least(q, day, 'adult') else None
+
+    def _kin_candidates(self, day, dead):
+        """Yield eligible blood kin in deterministic genealogical-distance order.
+
+        The graph uses only parent/child edges: spouses are intentionally excluded
+        here because the spouse preference is resolved before this fallback.  A
+        breadth-first walk makes the first kin tier closest; within a tier, older
+        people win, then id breaks ties.  It remains well-defined for incomplete or
+        cyclic setup data and never routes an estate through a dead dependent.
+        """
         people = self.people.rows
-        def alive(pid):
-            q = people.get(pid)
-            # A dependent can be named or related, but cannot receive an estate.
-            # This keeps legacy meaningful: a child becomes an eligible heir only
-            # after their public adult-stage transition.
-            return q if q is not None and q.alive and self.people.at_least(q, day, 'adult') else None
-        named = alive(dead.designated_heir) if dead.designated_heir is not None else None
-        if named is not None: return named
-        spouse = alive(dead.spouse) if dead.spouse is not None else None
-        if spouse is not None: return spouse
-        children = [people[pid] for pid in dead.children if alive(pid) is not None]
-        if children: return min(children, key=lambda q: (q.born_day, q.id))
-        kin_ids = set(dead.parents)
-        for parent_id in dead.parents:
-            parent = people.get(parent_id)
-            if parent: kin_ids.update(parent.children)
-        kin_ids.discard(dead.id)
-        kin = [people[pid] for pid in kin_ids if alive(pid) is not None]
-        return min(kin, key=lambda q: (q.born_day, q.id)) if kin else None
+        seen = {dead.id}; frontier = [dead.id]
+        while frontier:
+            next_ids = set()
+            for pid in frontier:
+                q = people.get(pid)
+                if q is None:
+                    continue
+                next_ids.update(q.parents)
+                next_ids.update(q.children)
+            next_ids.difference_update(seen)
+            if not next_ids:
+                return
+            seen.update(next_ids)
+            related = [self._eligible_heir(day, pid) for pid in next_ids]
+            related = [q for q in related if q is not None]
+            if related:
+                for q in sorted(related, key=lambda p: (p.born_day, p.id)):
+                    yield q
+                return
+            frontier = sorted(next_ids)
+
+    def _heir(self, day, dead):
+        """Deterministic succession: named heir, spouse, eldest child, then nearest kin.
+
+        This deliberately chooses a living adult rather than retaining a dead owner
+        key.  ``eldest_kin`` keeps the same spouse/child protections but skips a
+        named heir, allowing themes to opt out of designation without changing code.
+        """
+        rule = self.cfg['succession']['rule']
+        if rule == 'none':
+            return None
+        if rule == 'designated':
+            named = self._eligible_heir(day, dead.designated_heir) if dead.designated_heir is not None else None
+            if named is not None:
+                return named
+        spouse = self._eligible_heir(day, dead.spouse) if dead.spouse is not None else None
+        if spouse is not None:
+            return spouse
+        children = [self._eligible_heir(day, pid) for pid in dead.children]
+        children = [q for q in children if q is not None]
+        if children:
+            return min(children, key=lambda q: (q.born_day, q.id))
+        return next(self._kin_candidates(day, dead), None)
 
     def _transfer_estate(self, day, dead):
         """Transfer a dead person's own estate, and a seeded household estate when they head it.
@@ -426,6 +464,15 @@ class Engine:
         for pid in dead_ids:
             p = self.people.rows[pid]
             heir = self._transfer_estate(day, p)
+            # A public adult bond cannot survive one endpoint's death.  Settle the
+            # estate first (the surviving spouse is still a valid preferred heir),
+            # then clear the reciprocal edge so the survivor can form future bonds.
+            spouse = self.people.rows.get(p.spouse) if p.spouse is not None else None
+            if spouse is not None and spouse.spouse == pid:
+                spouse.spouse = None
+                p.spouse = None
+                self.ledger.event(day, 'unbond', [pid, spouse.id], cell=p.cell, place=p.place,
+                                  cause='death')
             farm = self.farming.assignments.pop(pid, None)
             home = self.farming.keepers.pop(pid, None)
             if farm is not None:
