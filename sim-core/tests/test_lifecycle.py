@@ -86,6 +86,15 @@ I.step()
 owned_lots=[l for l in I.inventory.lots.values() if l.owner==f'p:{heir.id}']
 check(not Ia.alive and I.places[Ia.home_place].owner==f'p:{heir.id}' and I.farming.farms[If].owner==f'p:{heir.id}' and owned_lots and any(l.holder==f'b:{I.farming.farms[If].store}' for l in owned_lots) and all(l.holder in {f'b:{I.farming.farms[If].store}',f'b:{I.farming.farms[If].home}'} for l in owned_lots) and I.farming.assignments.get(heir.id)==If,'designated heir receives estate, preserves custody, and can continue farm work')
 check(any(x.type=='transfer' and x.payload.get('estate') and x.payload.get('owner_to')==f'p:{heir.id}' for x in I.ledger.events),'estate succession is publicly ledgered')
+# Estate ownership can change while another household member has the active field routine.
+# That worker must lose stale authority and the qualified heir must receive the routine.
+R,Ra,Rb,Rf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,
+ 'demography.mortality_mult':{'infant':0.,'child':0.,'youth':0.,'adult':0.,'elder':1.0}})
+head=R.add_person(-60*365,Ra.cell,Ra.place,household_id=0,name='Head',sex='female',role='farmer')
+heir2=R.add_person(-25*365,Ra.cell,Ra.place,household_id=0,name='Heir',sex='female',role='farmer')
+head.estate_owner=True; head.designated_heir=heir2.id
+R.step()
+check(not head.alive and R.farming.farms[Rf].owner==f'p:{heir2.id}' and R.farming.assignments.get(heir2.id)==Rf and Rb.id not in R.farming.assignments,'estate-owner death reconciles stale farm workers to the qualified heir')
 # A dependent may be designated, but cannot take an estate before adulthood; the next
 # qualified successor (the spouse here) receives it instead.
 M,Ma,Mb,Mf=fixture({'demography.enabled':True,'population.birth_rate_per_year':0.0,'population.death_base_per_year':1.0,

@@ -473,23 +473,41 @@ class Engine:
                 p.spouse = None
                 self.ledger.event(day, 'unbond', [pid, spouse.id], cell=p.cell, place=p.place,
                                   cause='death')
-            farm = self.farming.assignments.pop(pid, None)
+            self.farming.assignments.pop(pid, None)
             home = self.farming.keepers.pop(pid, None)
-            if farm is not None:
-                candidates = [q for q in self.people.rows.values() if q.alive and q.household_id == p.household_id and q.home_place == p.home_place
-                              and q.role and self.people.can_use_role(q, q.role, day)]
-                f = self.farming.farms[farm]
-                candidates = [q for q in candidates if f.owner in self.people.owners(q)
-                              and self.cfg.role(q.role)['workplace'] == self.places[farm].kind
-                              and self.cells.crop['item'] in self.cfg.role(q.role)['produces']]
-                if candidates:
-                    successor = heir if heir in candidates else min(candidates, key=lambda q:q.id)
-                    self.farming.assignments[successor.id] = farm
-                    self.ledger.event(day, 'role_changed', [successor.id, pid], cell=successor.cell, place=successor.place, role=successor.role, succession=True)
             if home is not None and home in self.farming.households:
                 candidates = [q for q in self.people.rows.values() if q.alive and q.household_id == p.household_id and q.home_place == p.home_place
                               and self.people.at_least(q, day, 'youth') and self.farming.households[home].owner in self.people.owners(q)]
                 if candidates: self.farming.keepers[min(candidates,key=lambda q:q.id).id] = home
+        # Estate transfer can change a farm's owner even when the deceased was not
+        # its currently assigned worker. Reconcile every routine after the full
+        # death batch so a prior household worker cannot labor for a new estate owner.
+        for farm_id, f in sorted(self.farming.farms.items()):
+            workers = [worker_id for worker_id, assigned in self.farming.assignments.items() if assigned == farm_id]
+            authorized = []
+            for worker_id in workers:
+                q = self.people.rows[worker_id]
+                valid = (q.alive and q.home_place == f.home and q.role
+                         and self.people.can_use_role(q, q.role, day)
+                         and f.owner in self.people.owners(q)
+                         and self.cfg.role(q.role)['workplace'] == self.places[farm_id].kind
+                         and self.cells.crop['item'] in self.cfg.role(q.role)['produces'])
+                if valid:
+                    authorized.append(q)
+                else:
+                    self.farming.assignments.pop(worker_id, None)
+            if not authorized:
+                candidates = [q for q in self.people.rows.values()
+                              if q.alive and q.home_place == f.home and q.role
+                              and self.people.can_use_role(q, q.role, day)
+                              and f.owner in self.people.owners(q)
+                              and self.cfg.role(q.role)['workplace'] == self.places[farm_id].kind
+                              and self.cells.crop['item'] in self.cfg.role(q.role)['produces']]
+                if candidates:
+                    successor = min(candidates, key=lambda q: q.id)
+                    self.farming.assignments[successor.id] = farm_id
+                    self.ledger.event(day, 'role_changed', [successor.id], cell=successor.cell, place=successor.place,
+                                      role=successor.role, succession=True)
 
     def _step(self):
         from .cells import season_of
