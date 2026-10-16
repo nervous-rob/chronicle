@@ -44,6 +44,7 @@ VERBS = {
     "go":    {"timed": False, "requires": None},
     "haul":  {"timed": False, "requires": None},
     "give":  {"timed": True,  "requires": None},   # pressure-v1: hand carried food to a co-present person (inventory.transfer)
+    "trade": {"timed": True,  "requires": None},   # physical co-present sale at a place that enables trade
     "hunt":  {"timed": True,  "requires": None},   # pressure-v1: Cells.sample_hunt -> carried meat, capped by carry room
     "firebreak": {"timed": True, "requires": None},
     "project": {"timed": False, "requires": None},  # pressure-v1: Cells.clear on the person's own cell (removes wild fuel)
@@ -62,7 +63,7 @@ EVENT_TYPES = frozenset("""
 born conceived pregnancy_lost died bond unbond role_changed moved_home named stage
 departed arrived passed_through encountered journey_abandoned journey_refused migrated
 built repaired decayed destroyed burned
-transfer hired paid default contract_done
+transfer trade hired paid default contract_done
 say tell confess heard discovered
 court lapsed withdraw convene cancel attend gathering
 accuse judge confined released exiled

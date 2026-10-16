@@ -347,6 +347,30 @@ class Agency:
         if p.id in self.e.farming.journeys or not company: return None
         kg = int(sum(l.qty for l in self._carried_food(p)) * self.e.cfg['units']['food_unit_g'] / 1000)
         return {'kind': 'give', 'recipients': [c['id'] for c in company], 'carried_kg': kg} if kg >= 1 else None
+    def _offer_trade(self, p, company, **_):
+        """A market is a physical meeting place, not an omniscient exchange.
+
+        Only carried, owned lots may be offered; both parties must stand together in
+        a building whose catalog affordances explicitly enable trade. Prices are
+        the theme's public unit prices and settlement is immediate coin, in the
+        same atomic inventory transfer as the goods.
+        """
+        e = self.e
+        if p.id in e.farming.journeys or not company or p.place < 0: return None
+        place = e.places.get(p.place)
+        if place is None or place.destroyed_day is not None or 'enable:trade' not in e.cfg.building(place.kind)['affordances']:
+            return None
+        owner = e.people.owners(p); offered = []
+        for lot in sorted(e.inventory.lots.values(), key=lambda x: x.id):
+            if lot.holder != f'p:{p.id}' or lot.owner not in owner or lot.item == 'coin': continue
+            if e.cfg.item(lot.item)['kind'] not in ('food', 'material', 'tool', 'medium', 'livestock', 'vehicle'): continue
+            offered.append({'lot': lot.id, 'item': lot.item, 'qty': lot.qty, 'unit_price': e.cfg.item(lot.item)['price']})
+        partners = []
+        for c in company:
+            q = e.people.rows[c['id']]; qowners = e.people.owners(q)
+            coin = sum(l.qty for l in e.inventory.lots.values() if l.holder == f'p:{q.id}' and l.owner in qowners and l.item == 'coin')
+            if coin > 0: partners.append({'id': q.id, 'coin': coin})
+        return {'kind': 'trade', 'partners': partners, 'offers': offered} if offered and partners else None
     def _offer_hunt(self, p, packet, **_):
         e = self.e
         if p.id in e.farming.journeys or e.cfg['people']['carry_cap'] - e.inventory.weight(f'p:{p.id}') < 1.0: return None   # nothing to carry a kill home in
@@ -487,6 +511,29 @@ class Agency:
             if left == 0: break
         e.inventory.transfer(e.day, legs, actors=(p.id, rid), cell=p.cell, place=p.place, reason='give')
         e.farming._spend(p.id, hours, 'give'); return True, None
+    def _do_trade(self, p, a, entry):
+        e = self.e; rid, lid, qty = a.get('recipient'), a.get('lot'), a.get('qty')
+        partner = next((x for x in entry['partners'] if x['id'] == rid), None) if type(rid) is int else None
+        offer = next((x for x in entry['offers'] if x['lot'] == lid), None) if type(lid) is int else None
+        if partner is None or offer is None or type(qty) is not int or not 1 <= qty <= offer['qty']: return False, 'not_on_menu'
+        buyer = e.people.rows[rid]
+        if not e.people.co_present(p, buyer): return False, 'not_co_present'
+        place = e.places.get(p.place)
+        if place is None or place.destroyed_day is not None or 'enable:trade' not in e.cfg.building(place.kind)['affordances']: return False, 'trade_requires_market'
+        price = max(1, int(round(qty * float(offer['unit_price']))))
+        if partner['coin'] < price: return False, 'insufficient_coin'
+        hours = self._timed(p.id, 'trade')
+        buyer_owner = f'h:{buyer.household_id}' if buyer.household_id is not None else f'p:{buyer.id}'
+        seller_owner = f'h:{p.household_id}' if p.household_id is not None else f'p:{p.id}'
+        legs = [Leg(lid, qty, f'p:{rid}', buyer_owner)]; left = price
+        for coin in sorted((x for x in e.inventory.lots.values() if x.holder == f'p:{rid}' and x.owner in e.people.owners(buyer) and x.item == 'coin'), key=lambda x: x.id):
+            take = min(left, coin.qty)
+            if take: legs.append(Leg(coin.id, take, f'p:{p.id}', seller_owner)); left -= take
+            if left == 0: break
+        if left: return False, 'insufficient_coin'
+        e.inventory.transfer(e.day, legs, actors=(p.id, rid), cell=p.cell, place=p.place, reason='trade')
+        e.ledger.event(e.day, 'trade', [p.id, rid], cell=p.cell, place=p.place, item=offer['item'], qty=qty, unit_price=offer['unit_price'], price=price, seller_lot=lid)
+        e.farming._spend(p.id, hours, 'trade'); return True, None
     def _do_hunt(self, p, a, entry):
         e = self.e; target = a.get('target')
         if target not in entry['targets']: return False, 'not_on_menu'
