@@ -31,7 +31,10 @@ from .agency import Agency, LOG_FIELDS, ACTIONS, PLAN_FIELDS, BREAKS
 
 VERSION = 10  # exploration-v1: personal durable cell-knowledge snapshots.
 # VERSION 4   # contact-v1: memory records carry hops/from; tell events; [contact]/[gossip] wired
-MAX_BYTES = 128 * 1024 * 1024
+# Bounds decoded checkpoint state and compressed archives.  The 500-person
+# resumable scale gate legitimately reaches beyond 128 MiB of complete causal
+# state; retain one strict 256 MiB cap for both write and untrusted-load paths.
+MAX_BYTES = 256 * 1024 * 1024
 MAX_MEMBERS = 20000
 class CheckpointError(ValueError): pass
 
