@@ -31,7 +31,7 @@ check(trades,'shopper completes a paid local grocery purchase without a scripted
 check(sum(x.payload['qty'] for x in trades)>=420,'successive grocery purchases replenish at least the configured weekly food buffer')
 check(home_food>0,'shopper physically unloads bought grain into the household home store after eating')
 check(any(x.type=='transfer' and x.payload.get('reason')=='trade' for x in e.ledger.events),'food reaches the household through the ordinary atomic market transfer')
-check(all(r['source']=='market-routine' for r in e.agency.log),'seller and shopper decisions are bounded local routine choices')
+check(all(r['source'] in ('market-routine','plan:market-routine') for r in e.agency.log),'seller and shopper decisions are bounded local routine choices or their persisted local-plan steps')
 check(e.ledger.close_day(e.day,e.inventory.holdings())==[],'grocery hauling, sale, storage and consumption conserve all inventory')
 out={'suite':'market-grocery','checks':len(checks),'failures':[], 'scope':'Paid local grocery run: a shopper buys carried food at a visible market and physically deposits it at home.'}
 (ROOT/'test-results/market-grocery.json').write_text(json.dumps(out,indent=2))

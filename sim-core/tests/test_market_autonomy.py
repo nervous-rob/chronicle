@@ -27,7 +27,7 @@ e.agency.bind(seller.id,MarketPolicy()); e.agency.bind(buyer.id,MarketPolicy())
 for _ in range(8): e.step()
 trades=[x for x in e.ledger.events if x.type=='trade']
 check(trades,'local autonomous routine completes a paid trade without ScriptedPolicy')
-check(all(r['source']=='market-routine' for r in e.agency.log),'all choices come from the bounded market routine')
+check(all(r['source'] in ('market-routine','plan:market-routine') for r in e.agency.log),'all choices come from the bounded market routine')
 check(any(x.payload['item']=='grain' for x in trades),'the autonomous sale is food carried from seller inventory')
 check(any(x.type=='transfer' and x.payload.get('reason')=='trade' and buyer.id in x.actors for x in e.ledger.events),'buyer takes physical custody of the purchased grain before later consumption')
 check(any(x.type=='transfer' and x.payload.get('reason')=='trade' and seller.id in x.actors for x in e.ledger.events),'seller receives physical coin in the atomic sale')

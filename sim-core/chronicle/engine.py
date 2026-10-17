@@ -28,6 +28,7 @@ from .people import People
 from .farming import Farming
 from .agency import Agency
 from .projects import Projects
+from .employment import Employment
 
 
 @dataclass
@@ -57,6 +58,7 @@ class Engine:
         self.farming = Farming(self)
         self.agency = Agency(self)
         self.projects = Projects(self)
+        self.employment = Employment(self)
         # Daily cause trace for food deficits/deaths. Plain JSON-able state, bounded
         # recent list; diagnostic only, never used by resolvers or agents.
         self.deprivation = {'deficit_days': 0, 'by_cause': {}, 'by_person': {}, 'recent': [], 'deaths': {}}

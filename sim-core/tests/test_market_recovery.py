@@ -47,7 +47,7 @@ check(buyer.starvation < float(e.cfg['needs']['starve_days']-6),'ordinary eating
 check(e.places[bs].destroyed_day==0 and e.places[bf].destroyed_day==0,'trade does not repair or conceal the destroyed estate')
 check(sum(x.payload['qty'] for x in trades if x.payload['item']=='grain') >= 1000,'at least three carry-cap-bounded grain lots change custody')
 check(any(x.type=='transfer' and x.payload.get('reason')=='trade' and seller.id in x.actors for x in e.ledger.events),'seller receives physical coin for grain')
-check(all(r['source']=='market-routine' for r in e.agency.log),'recovery choices are entirely from the bounded local routine')
+check(all(r['source'] in ('market-routine','plan:market-routine') for r in e.agency.log),'recovery choices are entirely from the bounded local routine')
 check(e.ledger.close_day(e.day,e.inventory.holdings())==[],'thirty days of fires, hauling, sales and meals conserve every item')
 out={'suite':'market-recovery','checks':len(checks),'failures':[],
      'scope':'Three-household post-fire recovery. Local routine sees no remote stocks, prices, or partner hunger.'}

@@ -213,7 +213,7 @@ class Farming:
         return [l for l in self.e.inventory.lots.values() if l.holder == holder and l.owner == owner and self.e.cfg.item(l.item)['kind'] == 'food']
 
     def _goods(self, holder, owner):
-        return [l for l in self.e.inventory.lots.values() if l.holder == holder and l.owner == owner and self.e.cfg.item(l.item)['kind'] in ('food','material')]
+        return [l for l in self.e.inventory.lots.values() if l.holder == holder and l.owner == owner and self.e.cfg.item(l.item)['kind'] in ('food','material','coin')]
 
     def _at_holder(self, p, holder, lot=None):
         if holder == f'p:{p.id}': return True

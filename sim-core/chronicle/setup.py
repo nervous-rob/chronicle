@@ -193,6 +193,10 @@ def generate(e):
         pids = []
         for q in people:
             p = e.add_person(q['born'], cell, home, household_id=hid, name=q['name'], role=q['role'], capabilities=q['caps'], sex=q['sex'], estate_owner=(len(pids) == 0))
+            # A cluster's public institutions are part of an inhabitant's settlement
+            # knowledge from the start. This names a destination only; it reveals no
+            # stock, prices, attendance, or other households' needs.
+            p.known_cells.setdefault(seeds[k], {'day': 0, 'source': 'settlement'})
             pids.append(p.id)
             if q['role']: report['roles'][q['role']] = report['roles'].get(q['role'], 0) + 1
             for c in q['caps']: report['capabilities'][c] = report['capabilities'].get(c, 0) + 1

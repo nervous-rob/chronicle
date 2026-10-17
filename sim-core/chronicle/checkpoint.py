@@ -26,10 +26,11 @@ from .inventory import Inventory, Holder, Lot
 from .people import People, Person
 from .farming import Farming, Farm, Journey, Household
 from .projects import Projects, Project
+from .employment import Employment, Job
 from .engine import Engine, Place
 from .agency import Agency, LOG_FIELDS, ACTIONS, PLAN_FIELDS, BREAKS
 
-VERSION = 10  # exploration-v1: personal durable cell-knowledge snapshots.
+VERSION = 11  # exploration-v1: personal durable cell-knowledge snapshots.
 # VERSION 4   # contact-v1: memory records carry hops/from; tell events; [contact]/[gossip] wired
 # Bounds decoded checkpoint state and compressed archives.  The 500-person
 # resumable scale gate legitimately reaches beyond 128 MiB of complete causal
@@ -47,6 +48,7 @@ STATE = {
  'engine': 'places day reports last_check_day failed _in_step _completed_day deprivation'.split(),
  'agency': 'agents log day plans'.split(),
  'projects': 'projects next_id'.split(),
+ 'employment': 'jobs next_id'.split(),
  'world': 'w h n cell_km day_hours ys xs x_km y_km nbr terrain elevation slope river region water_adjacent river_adjacent road_level road_wear bridge ferry _hours_per_plains_cell region_seeds'.split(),
  'cells': 'land wl_ids wl_k moisture vegetation fuel rain_mm protection cleared burning burn_hour burn_scar_day burn_since_day edge_progress crop_id units_per_field fields planted crop_progress crop_health wildlife seir regions wet wind_dir wind_kph land_nbr deg last_fire_cells wl_initial budget'.split(),
  'ledger': 'kind_of events by_day _day_start _cur_day _f_res _f_from _f_to _f_qty _f_proc _f_day expected bucket_totals n_flows checks residuals'.split(),
@@ -56,13 +58,13 @@ STATE = {
 }
 # agency.policies are live callables: never serialized, cleared on load, rebind explicitly.
 REFS = {
- 'engine': 'cfg rng world cells ledger inventory people farming agency projects'.split(),
+ 'engine': 'cfg rng world cells ledger inventory people farming agency projects employment'.split(),
  'world': ['cfg'], 'cells': 'cfg world rng wl_cfg crop'.split(),
  'ledger': 'cfg on_event _ev_out _fl_out'.split(),
- 'inventory': 'cfg ledger'.split(), 'people': 'cfg inventory ledger rng'.split(), 'farming': ['e'], 'agency': ['e', 'policies'], 'projects': ['e'],
+ 'inventory': 'cfg ledger'.split(), 'people': 'cfg inventory ledger rng'.split(), 'farming': ['e'], 'agency': ['e', 'policies'], 'projects': ['e'], 'employment': ['e'],
 }
-CLASSES={'engine':Engine,'world':World,'cells':Cells,'ledger':Ledger,'inventory':Inventory,'people':People,'farming':Farming,'agency':Agency,'projects':Projects}
-RECORDS={c.__name__:c for c in (Place,Event,Holder,Lot,Person,Farm,Journey,Household,Project)}
+CLASSES={'engine':Engine,'world':World,'cells':Cells,'ledger':Ledger,'inventory':Inventory,'people':People,'farming':Farming,'agency':Agency,'projects':Projects,'employment':Employment}
+RECORDS={c.__name__:c for c in (Place,Event,Holder,Lot,Person,Farm,Journey,Household,Project,Job)}
 
 def canonical(x): return json.dumps(x,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
 def sha(b): return hashlib.sha256(b).hexdigest()
@@ -203,9 +205,9 @@ def validate(e):
     require(e.ledger._ev_out is None and e.ledger._fl_out is None,'external ledger output handles are not resumable in v1')
     hook=e.ledger.on_event
     require(getattr(hook,'__self__',None) is e and getattr(hook,'__func__',None) is Engine._witness_event,'event hook must be the engine witness callback')
-    require(e.agency.e is e and type(e.agency.policies) is dict and e.projects.e is e,'agency/project runtime references broken')
+    require(e.agency.e is e and type(e.agency.policies) is dict and e.projects.e is e and e.employment.e is e,'agency/project runtime references broken')
     require(e.farming.e is e and e.cells.world is e.world and e.inventory.ledger is e.ledger and e.people.ledger is e.ledger and e.people.inventory is e.inventory,'broken runtime references')
-    require(all(o.cfg is e.cfg for name,o in objects(e).items() if name not in ('engine','farming','agency','projects')),'configuration references diverge')
+    require(all(o.cfg is e.cfg for name,o in objects(e).items() if name not in ('engine','farming','agency','projects','employment')),'configuration references diverge')
     require(type(e.rng) is Streams and e.cells.rng is e.rng and e.people.rng is e.rng and e.rng.seed==(e.cfg.seed & ((1<<64)-1)),'RNG references/seed mismatch')
     require(e.cells.wl_cfg is e.cfg.catalog['wildlife'] and e.cells.crop is e.cfg.catalog['crops'][e.cells.crop_id],'catalog references diverge')
     require(e.cells.wl_ids==list(e.cfg.catalog['wildlife']),'wildlife axis order mismatch')
@@ -295,6 +297,8 @@ def validate(e):
     for k,h in e.inventory.holders.items():require(type(h) is Holder and h.key==k,'invalid holder identity')
     for key,q in e.projects.projects.items(): require(type(q) is Project and key==q.id and q.owner and q.kind in ('clear','extract','build','repair') and 0<=q.cell<n and q.place in e.places,'invalid project')
     require(type(e.projects.next_id) is int and e.projects.next_id>max(e.projects.projects,default=-1),'invalid project id counter')
+    for key,j in e.employment.jobs.items(): require(type(j) is Job and key==j.id and j.place in e.places and j.employer in e.people.rows and j.wage>0 and j.slots>0 and j.filled>=0,'invalid job')
+    require(type(e.employment.next_id) is int and e.employment.next_id>max(e.employment.jobs,default=-1),'invalid employment id counter')
     for key,f in e.farming.farms.items():require(type(f) is Farm and key==f.place and all(i in e.places for i in (f.place,f.home,f.store)),'invalid farm')
     for pid,f in e.farming.assignments.items():require(pid in e.people.rows and f in e.farming.farms,'invalid farm assignment')
     for key,h in e.farming.households.items():require(type(h) is Household and key==h.home and all(i in e.places for i in (h.home,h.store)) and e.places[h.home].owner==h.owner,'invalid household')
@@ -421,10 +425,10 @@ def load(path,*,expected_config=None):
         require(s['rng_seed']==e.rng.seed,'stored RNG seed mismatch')
         for name,o in objs.items():
             if name!='engine':setattr(e,name,o)
-            if name not in ('farming','agency','projects'):o.cfg=cfg
+            if name not in ('farming','agency','projects','employment'):o.cfg=cfg
         e.cells.world=e.world;e.cells.rng=e.rng;e.cells.wl_cfg=cfg.catalog['wildlife'];e.cells.crop=cfg.catalog['crops'][e.cells.crop_id]
         e.inventory.ledger=e.ledger;e.people.inventory=e.inventory;e.people.ledger=e.ledger;e.people.rng=e.rng
-        e.farming.e=e;e.agency.e=e;e.projects.e=e;e.agency.policies={};e.ledger.on_event=e._witness_event;e.ledger._ev_out=None;e.ledger._fl_out=None
+        e.farming.e=e;e.agency.e=e;e.projects.e=e;e.employment.e=e;e.agency.policies={};e.ledger.on_event=e._witness_event;e.ledger._ev_out=None;e.ledger._fl_out=None
         require(e.day==m['day'],'manifest day mismatch');validate(e)
         return e
     except CheckpointError:raise

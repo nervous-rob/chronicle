@@ -95,108 +95,121 @@ class ScriptedPolicy:
 
 
 class MarketPolicy:
-    """Deterministic, local market routine with no remote inventory access."""
+    """A bounded local market routine with designated seller/shopper roles.
+
+    Roles are selected by the caller, not inferred from other households: a seller
+    carries genuine local surplus to a visible market and keeps a stall there; a
+    shopper makes a grocery trip when locally reachable food falls below its
+    configured buffer. Every exchange still needs co-presence, carried goods,
+    carried coin, and the ordinary atomic trade transfer.
+    """
     name = 'market-routine'
 
-    def __init__(self, carry_offer_units=500, local_surplus_units=1000, grocery_units=0):
+    def __init__(self, carry_offer_units=500, local_surplus_units=1000, grocery_units=0, mode='mixed'):
         self.carry_offer_units = int(carry_offer_units)
         self.local_surplus_units = int(local_surplus_units)
-        # A household shopper only makes the trip when food visibly reachable at
-        # home falls below this carried-home buffer.  The policy never sees a
-        # remote pantry or a partner's need.
         self.grocery_units = int(grocery_units)
+        if mode not in ('mixed', 'seller', 'shopper'):
+            raise ValueError('market mode must be mixed, seller, or shopper')
+        self.mode = mode
 
     @staticmethod
     def _market(packet):
-        return next((x['id'] for x in packet['here']['places']
-                     if x['kind'] == 'market' and not x['destroyed']), None)
+        # A market must be either physically here or a public place this person already
+        # knows by location. The packet exposes no market inventory, people, or prices
+        # until arrival; knowing where the weekly market is is not omniscience.
+        local = next((x['id'] for x in packet['here']['places'] if x['kind'] == 'market' and not x['destroyed']), None)
+        return local if local is not None else next((x['id'] for x in packet.get('known_places', [])
+                                                     if x['kind'] == 'market' and not x['destroyed']), None)
 
     @staticmethod
     def _food(packet):
-        return sum(q for stock in packet['at_hand'].values()
-                   for item, q in stock.items() if item != 'coin')
+        return sum(q for stock in packet['at_hand'].values() for item, q in stock.items() if item != 'coin')
 
     @staticmethod
     def _coin(packet):
         return sum(stock.get('coin', 0) for stock in packet['at_hand'].values())
 
+    @staticmethod
+    def _plan(goal, steps):
+        return {'kind': 'plan', 'goal': {'kind': goal, 'why': 'local market routine'},
+                'steps': [{'action': a} for a in steps], 'assumptions': []}
+
+    @staticmethod
+    def _store(packet):
+        return next((x['id'] for x in packet['here']['places']
+                     if x['mine'] and x['kind'] == 'granary' and not x['here'] and not x['destroyed']), None)
+
+    def _sell(self, menu, carried_food):
+        if 'trade' not in menu or not carried_food: return None
+        offer = next((x for x in menu['trade']['offers'] if x['item'] != 'coin'), None)
+        partners = [x for x in menu['trade']['partners'] if x['coin'] > 0]
+        if offer is None or not partners: return None
+        qty = min(int(offer['qty']), self.carry_offer_units)
+        return None if qty <= 0 else {'kind': 'trade', 'recipient': min(partners, key=lambda x: x['id'])['id'], 'lot': offer['lot'], 'qty': qty}
+
     def decide(self, packet):
         menu = {row['kind']: row for row in packet['menu']}
-        market = self._market(packet)
-        here_market = packet['here']['place_kind'] == 'market'
-        carried = packet['at_hand'].get(f"p:{packet['self']['id']}", {})
+        market = self._market(packet); here_market = packet['here']['place_kind'] == 'market'
+        pid = packet['self']['id']; carried = packet['at_hand'].get(f'p:{pid}', {})
         carried_food = sum(q for item, q in carried.items() if item != 'coin')
+        home = packet['self']['home']; store = self._store(packet)
+        at_home = home is not None and packet['here']['place'] == home
 
-        # A configured household shopper keeps bought food and returns home
-        # before considering another market action.  This policy role is local
-        # configuration, not an inference about a seller's or partner's state.
-        # Emergency buyers retain the same behavior when their own body is hungry.
-        home = packet['self']['home']
-        if here_market and carried_food and (self.grocery_units > 0 or packet['body']['last_meal'] != 'ok'):
+        # Bought food becomes household food only after physical return and unloading.
+        if self.mode in ('shopper', 'mixed') and at_home and carried_food and 'haul' in menu:
+            dst = f'b:{home}'
+            if dst in menu['haul']['destinations']:
+                return {'kind': 'haul', 'from': f'p:{pid}', 'to': dst, 'limit': carried_food}
+
+        # A grocery shopper does not resell food just purchased at this market.
+        # This preserves the compact mixed-role fixture while designated shopper
+        # roles make the same return-home commitment.
+        if here_market and carried_food and (self.mode == 'shopper' or self.grocery_units > 0 or packet['body']['last_meal'] != 'ok'):
             if home is not None and home != packet['here']['place'] and 'go' in menu and home in menu['go']['places']:
-                return {'kind': 'go', 'place': home}
+                return self._plan('food', [{'kind': 'go', 'place': home}, {'kind': 'haul', 'from': f'p:{pid}', 'to': f'b:{home}', 'limit': carried_food}])
 
-        # Sell only a physical carried lot, to a co-present buyer who has pocket coin.
-        if here_market and carried_food and 'trade' in menu:
-            offer = next((x for x in menu['trade']['offers'] if x['item'] != 'coin'), None)
-            partners = [x for x in menu['trade']['partners'] if x['coin'] > 0]
-            if offer is not None and partners:
-                qty = min(int(offer['qty']), self.carry_offer_units)
-                if qty > 0:
-                    return {'kind': 'trade', 'recipient': min(partners, key=lambda x: x['id'])['id'],
-                            'lot': offer['lot'], 'qty': qty}
+        # Sellers wait at a physical stall if no eligible buyer is co-present.
+        if self.mode in ('seller', 'mixed') and here_market and carried_food:
+            sale = self._sell(menu, carried_food)
+            if sale is not None: return sale
+            if self.mode == 'seller': return {'kind': 'rest'}
 
-        # A buyer who has acquired food returns to their observed home rather
-        # than sleeping indefinitely at the market. This is ordinary visible-place
-        # travel; it does not disclose any remote inventory or need.
-        home = packet['self']['home']
-        if here_market and carried_food and home is not None and home != packet['here']['place'] and 'go' in menu and home in menu['go']['places']:
-            return {'kind': 'go', 'place': home}
+        if here_market and carried_food and self.mode in ('shopper', 'mixed'):
+            if home is not None and home != packet['here']['place'] and 'go' in menu and home in menu['go']['places']:
+                return self._plan('food', [{'kind': 'go', 'place': home}, {'kind': 'haul', 'from': f'p:{pid}', 'to': f'b:{home}', 'limit': carried_food}])
 
-        # A seller who has completed a sale returns to an observed, intact own
-        # store to replenish.  This is a travel decision only: whether that store
-        # still holds surplus is learned after arrival through ordinary custody.
-        store = next((x['id'] for x in packet['here']['places']
-                      if x['mine'] and x['kind'] == 'granary' and not x['here'] and not x['destroyed']), None)
-        if here_market and not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
-            return {'kind': 'go', 'place': store}
+        # Household cash is not a remote account: the shopper must physically pick it
+        # up at home before leaving.  The bounded pocket float is a routine parameter,
+        # not knowledge of a seller, price, or remote market stock.
+        if self.mode in ('shopper', 'mixed') and at_home and self._coin(packet) > 0 and not carried.get('coin', 0):
+            need = self._food(packet) < self.grocery_units if self.grocery_units > 0 else self._food(packet) == 0
+            if need and 'haul' in menu:
+                src = f'b:{home}'
+                if src in menu['haul']['sources'] and f'p:{pid}' in menu['haul']['destinations']:
+                    return {'kind': 'haul', 'from': src, 'to': f'p:{pid}', 'limit': 20}
 
-        # A completed grocery run becomes household food only after the shopper
-        # physically puts the carried lot into the home store.  That makes a market
-        # purchase available to co-residents through the ordinary eating rules.
-        if (not here_market and home is not None and packet['here']['place'] == home
-                and carried_food and 'haul' in menu):
-            own_home = f"b:{home}"
-            if own_home in menu['haul']['destinations']:
-                return {'kind': 'haul', 'from': f"p:{packet['self']['id']}", 'to': own_home,
-                        'limit': carried_food}
-
-        if not here_market and market is not None:
-            # Move a bounded surplus through normal custody and travel primitives.
-            if carried_food:
-                if 'go' in menu and market in menu['go']['places']:
-                    return {'kind': 'go', 'place': market}
-            elif self._food(packet) >= self.local_surplus_units and 'haul' in menu:
-                src = next((h for h, stock in packet['at_hand'].items()
-                            if h.startswith('b:') and sum(q for item, q in stock.items() if item != 'coin') >= self.local_surplus_units), None)
-                if src is not None:
-                    return {'kind': 'haul', 'from': src, 'to': f"p:{packet['self']['id']}",
-                            'limit': self.carry_offer_units}
-            # An owner may travel to an observed local store, but learns whether it
-            # actually has surplus only after arriving.  This is intentionally not
-            # remote stock inspection.
-            if not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
+        if here_market and not carried_food and self.mode in ('seller', 'mixed'):
+            if store is not None and 'go' in menu and store in menu['go']['places']:
                 return {'kind': 'go', 'place': store}
-            # A household shopper makes a grocery run from an observed local
-            # market when their *reachable here-and-now* household food has fallen
-            # below the configured buffer.  This is a weekly-style cadence when
-            # grocery_units is seven days of demand, not a remote-stock oracle.
-            need_groceries = self._food(packet) < self.grocery_units if self.grocery_units > 0 else self._food(packet) == 0
-            if self._coin(packet) > 0 and (need_groceries or packet['body']['last_meal'] != 'ok'):
-                if 'go' in menu and market in menu['go']['places']:
-                    return {'kind': 'go', 'place': market}
 
-        # No market opportunity: preserve existing household production/logistics.
+        if self.mode in ('seller', 'mixed'):
+            if not here_market and not carried_food and self._food(packet) >= self.local_surplus_units and 'haul' in menu:
+                src = next((h for h, stock in packet['at_hand'].items() if h.startswith('b:') and sum(q for item,q in stock.items() if item != 'coin') >= self.local_surplus_units), None)
+                if src is not None: return {'kind': 'haul', 'from': src, 'to': f'p:{pid}', 'limit': self.carry_offer_units}
+            if not here_market and carried_food and market is not None and 'go' in menu and market in menu['go']['places']:
+                return {'kind': 'go', 'place': market}
+            if not here_market and not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
+                steps=[{'kind':'go','place':store}]
+                if market is not None: steps += [{'kind':'haul','from':f'b:{store}','to':f'p:{pid}','limit':self.carry_offer_units},{'kind':'go','place':market}]
+                return self._plan('food', steps)
+
+        if self.mode in ('shopper', 'mixed'):
+            need = self._food(packet) < self.grocery_units if self.grocery_units > 0 else self._food(packet) == 0
+            if not here_market and market is not None and self._coin(packet) > 0 and (need or packet['body']['last_meal'] != 'ok') and 'go' in menu and market in menu['go']['places']:
+                return self._plan('food', [{'kind':'go','place':market},{'kind':'rest'}])
+            if here_market and not carried_food and self.mode == 'shopper': return {'kind':'rest'}
+
         return {'kind': 'work'} if 'work' in menu else {'kind': 'rest'}
 
 
@@ -374,6 +387,14 @@ class Agency:
                            'home': bid == p.home_place, 'destroyed': b.destroyed_day is not None,
                            'lodging': 'lodging' in spec['affordances'] and not mine,
                            'rate': (b.room_rate if b.room_rate is not None else spec.get('lodging_rate')) if 'lodging' in spec['affordances'] and not mine else None})
+        # Public places at personally known cells are legitimate travel destinations,
+        # not remotely observed state. This makes a settlement market reachable from
+        # homes scattered around its cluster while preserving local-only trade.
+        known_places = []
+        for bid, b in sorted(e.places.items()):
+            if b.owner is None and b.cell in p.known_cells:
+                known_places.append({'id': bid, 'kind': b.kind, 'cell': b.cell,
+                                     'destroyed': b.destroyed_day is not None})
         company = []
         for qid in sorted(e.people.rows):
             q = e.people.rows[qid]
@@ -397,13 +418,14 @@ class Agency:
                      'traits': list(p.traits), 'home': p.home_place, 'hours_left': round(float(f.budgets[pid]), 6),
                      'last_action': p.last_action,
                      'in_transit': None if j is None else {'target': j.target, 'hours_to_next_cell': round(j.remaining, 4)}},
+            'jobs': e.employment.offers(p),
             'body': {'last_meal': self._band(p.needs['food']), 'hungry_days': int(math.ceil(p.starvation - 1e-9)),
                      'health': self._band(p.needs['health']), 'injured': p.needs['health'] < th['low'],
                      'rest': self._band(p.needs['rest']), 'sheltered': p.needs['shelter'] >= 0.5,
                      'slept': self._band(p.last_sleep_quality)},
             'here': {'cell': p.cell, 'place': p.place, 'place_kind': None if here is None else here.kind, 'at_own_place': at_own,
                      'surroundings': plain(e.cells.visible(p.cell)), 'company': company, 'places': places},
-            'at_hand': at_hand, 'media': media, 'memory': memory,
+            'at_hand': at_hand, 'media': media, 'memory': memory, 'known_places': known_places,
             'records_known': [{'medium': lid, 'last_seen_cell': c} for lid, c in sorted(p.known_records.items())],
             'map': {'known_cells': sorted(p.known_cells), 'knowledge': plain(p.known_cells)},
             'beliefs': {k: {'mean': round(v[0], 4), 'samples': v[2]} for k, v in sorted(p.expectations.items())},
@@ -435,14 +457,24 @@ class Agency:
         f = self.e.farming
         if p.id in f.assignments: return {'kind': 'work', 'farm': f.assignments[p.id]}
         return {'kind': 'work', 'household': f.keepers[p.id]} if p.id in f.keepers else None   # keepers: pantry routine
+    def _offer_labor(self, p, **_):
+        offers = [{'id': j.id, 'wage': j.wage, 'slots': j.slots} for j in self.e.employment.available_here(p)]
+        return {'kind': 'labor', 'offers': offers} if offers else None
+
     def _offer_go(self, p, packet, **_):
         j = self.e.farming.journeys.get(p.id)
-        go = [j.target] if j is not None else [b['id'] for b in packet['here']['places'] if not b['destroyed'] and not b['here']]
+        if j is not None:
+            go = [j.target]
+        else:
+            go = [b['id'] for b in packet['here']['places'] if not b['destroyed'] and not b['here']]
+            # Known ownerless public places are destinations, not visible remote stock.
+            go += [b['id'] for b in packet.get('known_places', []) if not b['destroyed']]
+            go = list(dict.fromkeys(go))
         return {'kind': 'go', 'places': go} if go else None
     def _offer_haul(self, p, packet, at_own, **_):
         e = self.e; f = e.farming; cfg = e.cfg; pid = p.id
         if pid in f.journeys: return None
-        sources = [h for h, stock in packet['at_hand'].items() if any(cfg.item(i)['kind'] in ('food','material') for i in stock)]
+        sources = [h for h, stock in packet['at_hand'].items() if any(cfg.item(i)['kind'] in ('food','material','coin') for i in stock)]
         if not sources: return None
         return {'kind': 'haul', 'sources': sources, 'destinations': [f'p:{pid}'] + ([f'b:{p.place}'] if at_own else []),
                 'owners': sorted(e.people.owners(p)), 'kg_per_hour': f.cfg['handling_kg_per_hour']}
@@ -589,6 +621,12 @@ class Agency:
     # is rejected before any primitive runs. Timed verbs check the budget (_timed) after argument
     # validation and spend after the primitive succeeded.
     def _do_rest(self, p, a, entry): return True, None
+    def _do_labor(self, p, a, entry):
+        jid = a.get('job')
+        if type(jid) is not int or not any(x['id'] == jid for x in entry['offers']): return False, 'not_on_menu'
+        hours = self._timed(p.id, 'labor')
+        self.e.employment.work(p, jid); self.e.farming._spend(p.id, hours, 'labor'); return True, None
+
     def _do_work(self, p, a, entry):
         f = self.e.farming
         (f.automatic if p.id in f.assignments else f.keep)(p.id); return True, None

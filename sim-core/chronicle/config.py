@@ -41,6 +41,7 @@ CAPABILITY_FIELDS = ("learn_days", "min_stage", "teachers", "needs_medium", "sel
 VERBS = {
     "rest":  {"timed": False, "requires": None},
     "work":  {"timed": False, "requires": None},
+    "labor": {"timed": True, "requires": None},
     "go":    {"timed": False, "requires": None},
     "haul":  {"timed": False, "requires": None},
     "give":  {"timed": True,  "requires": None},   # pressure-v1: hand carried food to a co-present person (inventory.transfer)
