@@ -94,6 +94,72 @@ class ScriptedPolicy:
         return self.fn(packet)
 
 
+class MarketPolicy:
+    """Deterministic, local market routine with no remote inventory access."""
+    name = 'market-routine'
+
+    def __init__(self, carry_offer_units=500, local_surplus_units=1000):
+        self.carry_offer_units = int(carry_offer_units)
+        self.local_surplus_units = int(local_surplus_units)
+
+    @staticmethod
+    def _market(packet):
+        return next((x['id'] for x in packet['here']['places']
+                     if x['kind'] == 'market' and not x['destroyed']), None)
+
+    @staticmethod
+    def _food(packet):
+        return sum(q for stock in packet['at_hand'].values()
+                   for item, q in stock.items() if item != 'coin')
+
+    @staticmethod
+    def _coin(packet):
+        return sum(stock.get('coin', 0) for stock in packet['at_hand'].values())
+
+    def decide(self, packet):
+        menu = {row['kind']: row for row in packet['menu']}
+        market = self._market(packet)
+        here_market = packet['here']['place_kind'] == 'market'
+        carried = packet['at_hand'].get(f"p:{packet['self']['id']}", {})
+        carried_food = sum(q for item, q in carried.items() if item != 'coin')
+
+        # Sell only a physical carried lot, to a co-present buyer who has pocket coin.
+        if here_market and carried_food and 'trade' in menu:
+            offer = next((x for x in menu['trade']['offers'] if x['item'] != 'coin'), None)
+            partners = [x for x in menu['trade']['partners'] if x['coin'] > 0]
+            if offer is not None and partners:
+                qty = min(int(offer['qty']), self.carry_offer_units)
+                if qty > 0:
+                    return {'kind': 'trade', 'recipient': min(partners, key=lambda x: x['id'])['id'],
+                            'lot': offer['lot'], 'qty': qty}
+
+        if not here_market and market is not None:
+            # Move a bounded surplus through normal custody and travel primitives.
+            if carried_food:
+                if 'go' in menu and market in menu['go']['places']:
+                    return {'kind': 'go', 'place': market}
+            elif self._food(packet) >= self.local_surplus_units and 'haul' in menu:
+                src = next((h for h, stock in packet['at_hand'].items()
+                            if h.startswith('b:') and sum(q for item, q in stock.items() if item != 'coin') >= self.local_surplus_units), None)
+                if src is not None:
+                    return {'kind': 'haul', 'from': src, 'to': f"p:{packet['self']['id']}",
+                            'limit': self.carry_offer_units}
+            # An owner may travel to an observed local store, but learns whether it
+            # actually has surplus only after arriving.  This is intentionally not
+            # remote stock inspection.
+            store = next((x['id'] for x in packet['here']['places']
+                          if x['mine'] and x['kind'] == 'granary' and not x['here'] and not x['destroyed']), None)
+            if not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
+                return {'kind': 'go', 'place': store}
+            # Food-poor people seek only a visible market in their current cell.
+            if self._coin(packet) > 0 and (self._food(packet) == 0 or packet['body']['last_meal'] != 'ok'):
+                if 'go' in menu and market in menu['go']['places']:
+                    return {'kind': 'go', 'place': market}
+
+        # No market opportunity: preserve existing household production/logistics.
+        return {'kind': 'work'} if 'work' in menu else {'kind': 'rest'}
+
+
 class ReplayPolicy:
     """Replays a saved decision log. Refuses to continue when the observed packet differs
     from the one the original decision was made on (replay divergence)."""
