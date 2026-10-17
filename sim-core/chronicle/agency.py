@@ -98,9 +98,13 @@ class MarketPolicy:
     """Deterministic, local market routine with no remote inventory access."""
     name = 'market-routine'
 
-    def __init__(self, carry_offer_units=500, local_surplus_units=1000):
+    def __init__(self, carry_offer_units=500, local_surplus_units=1000, grocery_units=0):
         self.carry_offer_units = int(carry_offer_units)
         self.local_surplus_units = int(local_surplus_units)
+        # A household shopper only makes the trip when food visibly reachable at
+        # home falls below this carried-home buffer.  The policy never sees a
+        # remote pantry or a partner's need.
+        self.grocery_units = int(grocery_units)
 
     @staticmethod
     def _market(packet):
@@ -123,11 +127,12 @@ class MarketPolicy:
         carried = packet['at_hand'].get(f"p:{packet['self']['id']}", {})
         carried_food = sum(q for item, q in carried.items() if item != 'coin')
 
-        # A hungry buyer keeps purchased food and returns home; they do not
-        # immediately flip it back to the seller merely because that seller has coin.
-        # The hunger band is their own bodily observation, not knowledge of a partner.
+        # A configured household shopper keeps bought food and returns home
+        # before considering another market action.  This policy role is local
+        # configuration, not an inference about a seller's or partner's state.
+        # Emergency buyers retain the same behavior when their own body is hungry.
         home = packet['self']['home']
-        if here_market and carried_food and packet['body']['last_meal'] != 'ok':
+        if here_market and carried_food and (self.grocery_units > 0 or packet['body']['last_meal'] != 'ok'):
             if home is not None and home != packet['here']['place'] and 'go' in menu and home in menu['go']['places']:
                 return {'kind': 'go', 'place': home}
 
@@ -156,6 +161,16 @@ class MarketPolicy:
         if here_market and not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
             return {'kind': 'go', 'place': store}
 
+        # A completed grocery run becomes household food only after the shopper
+        # physically puts the carried lot into the home store.  That makes a market
+        # purchase available to co-residents through the ordinary eating rules.
+        if (not here_market and home is not None and packet['here']['place'] == home
+                and carried_food and 'haul' in menu):
+            own_home = f"b:{home}"
+            if own_home in menu['haul']['destinations']:
+                return {'kind': 'haul', 'from': f"p:{packet['self']['id']}", 'to': own_home,
+                        'limit': carried_food}
+
         if not here_market and market is not None:
             # Move a bounded surplus through normal custody and travel primitives.
             if carried_food:
@@ -172,8 +187,12 @@ class MarketPolicy:
             # remote stock inspection.
             if not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
                 return {'kind': 'go', 'place': store}
-            # Food-poor people seek only a visible market in their current cell.
-            if self._coin(packet) > 0 and (self._food(packet) == 0 or packet['body']['last_meal'] != 'ok'):
+            # A household shopper makes a grocery run from an observed local
+            # market when their *reachable here-and-now* household food has fallen
+            # below the configured buffer.  This is a weekly-style cadence when
+            # grocery_units is seven days of demand, not a remote-stock oracle.
+            need_groceries = self._food(packet) < self.grocery_units if self.grocery_units > 0 else self._food(packet) == 0
+            if self._coin(packet) > 0 and (need_groceries or packet['body']['last_meal'] != 'ok'):
                 if 'go' in menu and market in menu['go']['places']:
                     return {'kind': 'go', 'place': market}
 

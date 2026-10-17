@@ -426,6 +426,8 @@ def _validate(raw: dict, cat: dict) -> None:
     _req(st, "notable_starters", int, "setup", 0)
     _req(st, "pocket_coin", int, "setup", 0)
     if not isinstance(st["seed_media"], bool): raise ConfigError("setup.seed_media must be bool")
+    if not isinstance(st.get("cluster_buildings", []), list) or not all(isinstance(b, str) and b in cat["buildings"] for b in st.get("cluster_buildings", [])):
+        raise ConfigError("setup.cluster_buildings: list of catalog building ids required")
     if not isinstance(st["chronicler_role"], str) or (st["chronicler_role"] and st["chronicler_role"] not in roles):
         raise ConfigError("setup.chronicler_role must be \"\" or a catalog role")
     sr = st["subsistence_role"]

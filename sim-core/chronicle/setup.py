@@ -84,7 +84,17 @@ def generate(e):
     for k, s in enumerate(seeds):
         report['clusters'].append({'seed_cell': s, 'households': sum(1 for c in cluster_of if c == k)})
 
-    # ---- 3. per-household: cell, buildings, people, roles, capabilities, food, coin, media
+    # ---- 3. community buildings at cluster seeds.  These are ownerless public
+    # places; themes choose their kinds through setup.cluster_buildings.
+    for k, cell in enumerate(seeds):
+        for kind in st['cluster_buildings']:
+            try:
+                e.seed_place(kind, cell, None)
+            except (ValueError, NotImplementedError) as exc:
+                report['skipped_buildings'][kind] = report['skipped_buildings'].get(kind, 0) + 1
+                report['warnings'].append(f'cluster {k}: community {kind} skipped: {exc}')
+
+    # ---- 4. per-household: cell, buildings, people, roles, capabilities, food, coin, media
     hb = st['household_buildings']; media_by_role = st['media_by_role']; lit = st['literacy_by_role']
     roles = cfg.catalog['roles']; mix = pop['roles_mix']; role_ids = sorted(mix); role_p = np.array([mix[r] for r in role_ids])
     sigma = _lognormal_sigma(pop['wealth_gini']); cls_names = sorted(st['coin_by_wealth'], key=lambda k: st['coin_by_wealth'][k])

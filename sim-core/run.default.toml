@@ -114,6 +114,7 @@ seed_media = true             # give auto_record roles a matching medium at t0
 pocket_coin = 20              # coin carried by a household head at t0; the rest of the class amount sits in the home
 chronicler_role = "historian" # role id given to the per-cluster chronicler ("" = none); its `requires` are granted
 subsistence_role = "farmer"   # fallback food-producing role for a household with no food producer ("" = none): first non-head adult, else head. Without a market such a household lives on its buffer and starves in month ~9 (worldgen-v1 finding)
+cluster_buildings = ["market"] # public cluster places; catalog kinds, not a hard-coded market primitive
 
 [setup.household_buildings]   # free keys = role ids (+ anyone): building kinds every household (anyone) / a head with that role gets.
 anyone = ["house", "granary"] # the head's role workplace (catalog roles.<id>.workplace) is added automatically. First sheltered = home,

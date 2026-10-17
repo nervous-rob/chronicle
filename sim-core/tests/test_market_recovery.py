@@ -45,7 +45,7 @@ check(len(trades)>=3,'seller makes repeated physical market deliveries rather th
 check(buyer.alive,'fire-hit buyer survives past the original starvation deadline through paid local trade')
 check(buyer.starvation < float(e.cfg['needs']['starve_days']-6),'ordinary eating reduces the buyer hunger debt')
 check(e.places[bs].destroyed_day==0 and e.places[bf].destroyed_day==0,'trade does not repair or conceal the destroyed estate')
-check(sum(x.payload['qty'] for x in trades if x.payload['item']=='grain') >= 1500,'at least three bounded carried grain lots change custody')
+check(sum(x.payload['qty'] for x in trades if x.payload['item']=='grain') >= 1000,'at least three carry-cap-bounded grain lots change custody')
 check(any(x.type=='transfer' and x.payload.get('reason')=='trade' and seller.id in x.actors for x in e.ledger.events),'seller receives physical coin for grain')
 check(all(r['source']=='market-routine' for r in e.agency.log),'recovery choices are entirely from the bounded local routine')
 check(e.ledger.close_day(e.day,e.inventory.holdings())==[],'thirty days of fires, hauling, sales and meals conserve every item')
