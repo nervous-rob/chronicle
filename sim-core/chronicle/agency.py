@@ -123,6 +123,14 @@ class MarketPolicy:
         carried = packet['at_hand'].get(f"p:{packet['self']['id']}", {})
         carried_food = sum(q for item, q in carried.items() if item != 'coin')
 
+        # A hungry buyer keeps purchased food and returns home; they do not
+        # immediately flip it back to the seller merely because that seller has coin.
+        # The hunger band is their own bodily observation, not knowledge of a partner.
+        home = packet['self']['home']
+        if here_market and carried_food and packet['body']['last_meal'] != 'ok':
+            if home is not None and home != packet['here']['place'] and 'go' in menu and home in menu['go']['places']:
+                return {'kind': 'go', 'place': home}
+
         # Sell only a physical carried lot, to a co-present buyer who has pocket coin.
         if here_market and carried_food and 'trade' in menu:
             offer = next((x for x in menu['trade']['offers'] if x['item'] != 'coin'), None)
@@ -132,6 +140,21 @@ class MarketPolicy:
                 if qty > 0:
                     return {'kind': 'trade', 'recipient': min(partners, key=lambda x: x['id'])['id'],
                             'lot': offer['lot'], 'qty': qty}
+
+        # A buyer who has acquired food returns to their observed home rather
+        # than sleeping indefinitely at the market. This is ordinary visible-place
+        # travel; it does not disclose any remote inventory or need.
+        home = packet['self']['home']
+        if here_market and carried_food and home is not None and home != packet['here']['place'] and 'go' in menu and home in menu['go']['places']:
+            return {'kind': 'go', 'place': home}
+
+        # A seller who has completed a sale returns to an observed, intact own
+        # store to replenish.  This is a travel decision only: whether that store
+        # still holds surplus is learned after arrival through ordinary custody.
+        store = next((x['id'] for x in packet['here']['places']
+                      if x['mine'] and x['kind'] == 'granary' and not x['here'] and not x['destroyed']), None)
+        if here_market and not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
+            return {'kind': 'go', 'place': store}
 
         if not here_market and market is not None:
             # Move a bounded surplus through normal custody and travel primitives.
@@ -147,8 +170,6 @@ class MarketPolicy:
             # An owner may travel to an observed local store, but learns whether it
             # actually has surplus only after arriving.  This is intentionally not
             # remote stock inspection.
-            store = next((x['id'] for x in packet['here']['places']
-                          if x['mine'] and x['kind'] == 'granary' and not x['here'] and not x['destroyed']), None)
             if not carried_food and store is not None and 'go' in menu and store in menu['go']['places']:
                 return {'kind': 'go', 'place': store}
             # Food-poor people seek only a visible market in their current cell.
