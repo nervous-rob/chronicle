@@ -25,6 +25,10 @@ class Project:
     inputs: dict = field(default_factory=dict)       # item -> reserved integer qty
     contributors: dict = field(default_factory=dict) # pid -> hours
     created_day: int = 0
+    # Set only by a prepaid work order; completion assigns the durable output to its client.
+    recipient_owner: str | None = None
+    extract_item: str | None = None
+    extract_qty: int = 0
 
 class Projects:
     def __init__(self, engine):
@@ -54,11 +58,15 @@ class Projects:
         for q in sorted(active,key=lambda q:q.id):
             out.append({'id':q.id,'kind':q.kind,'building':q.building,'target_place':q.target_place,
                         'progress_hours':round(q.labor_hours,4),'required_hours':round(q.required_hours,4),'continue':True})
-        # Clear/extract are site effects. Extraction follows clearing but is not tied to a named building kind.
+        # Extraction is declared by the physical workplace.  The legacy cleared-land
+        # timber path remains available so existing worlds/tests retain their first loop.
         if float(e.cells.cleared[cell]) < .999:
             out.append({'kind':'clear'})
+        extracts=e.cfg.building(e.places[p.place].kind).get('extracts', {})
+        items=sorted(extracts)
         if float(e.cells.cleared[cell]) > 0.0:
-            out.append({'kind':'extract','items':['timber']})
+            items=['timber'] + items
+        if items: out.append({'kind':'extract','items':items})
         # Existing ruins may be repaired if their catalog requirements can be supplied here.
         for bid,b in sorted(e.places.items()):
             if b.cell!=cell or b.destroyed_day is None or b.owner!=owner: continue
@@ -92,9 +100,14 @@ class Projects:
         building=a.get('building'); target=a.get('target_place')
         if kind=='clear': need={}; hours=e.cfg['projects']['clear_labor_hours']; building=None; target=None
         elif kind=='extract':
-            if a.get('item')!='timber': raise ValueError('unknown_extract_item')
-            if float(e.cells.cleared[p.cell])<=0: raise ValueError('uncleared_site')
-            need={}; hours=e.cfg['projects']['extract_labor_hours']; building=None; target=None
+            item=a.get('item'); spec=e.cfg.building(e.places[p.place].kind).get('extracts', {})
+            if item == 'timber':
+                if float(e.cells.cleared[p.cell])<=0: raise ValueError('uncleared_site')
+                qty=int(e.cfg['projects']['timber_per_extract']); hours=e.cfg['projects']['extract_labor_hours']
+            elif item in spec:
+                qty, hours=spec[item]
+            else: raise ValueError('unknown_extract_item')
+            need={}; building=None; target=None
         else:
             if kind=='repair':
                 if type(target) is not int or target not in e.places: raise ValueError('invalid_repair_target')
@@ -106,9 +119,9 @@ class Projects:
             if int(e.world.terrain[p.cell]) not in [T[t] for t in spec['terrain_allow']] or spec['requires']: raise ValueError('site_not_supported')
             if kind=='build' and any(b.id==p.place and b.kind==building and b.destroyed_day is None for b in e.places.values()): raise ValueError('building_already_present')
             need=dict(spec['materials']); hours=float(spec['labor_days'])*e.cfg['agriculture']['activity_hours_per_day']
-        q=Project(self.next_id,kind,p.cell,p.place,owner,building,target,0.,hours,self._reserve(p,owner,need),{},e.day)
+        q=Project(self.next_id,kind,p.cell,p.place,owner,building,target,0.,hours,self._reserve(p,owner,need),{},e.day, extract_item=(item if kind=='extract' else None), extract_qty=(qty if kind=='extract' else 0))
         self.projects[q.id]=q; self.next_id+=1
-        e.ledger.event(e.day,'project_started',[p.id],cell=p.cell,place=p.place,project=q.id,kind=kind,building=building,target_place=target)
+        e.ledger.event(e.day,'project_started',[p.id],cell=p.cell,place=p.place,project=q.id,kind=kind,building=building,target_place=target,extract_item=q.extract_item,extract_qty=q.extract_qty)
         return q
 
     def work(self,p,a):
@@ -125,22 +138,50 @@ class Projects:
         if q.labor_hours+1e-7>=q.required_hours: self._complete(q,p.id)
         return q.id,used
 
+    def contract_work(self, p, project_id, employer, hours):
+        """Apply an establishment's paid craft shift to an existing project.
+
+        The employer must own both workplace and project.  The worker receives no
+        site ownership, material custody, or authority to open/cancel projects.
+        Craft changes credited output per physical hour, never the wage or inputs.
+        """
+        e=self.e
+        if type(project_id) is not int or project_id not in self.projects: raise ValueError('unknown_project')
+        if type(employer) is not int or employer not in e.people.rows: raise ValueError('unknown_employer')
+        if not isinstance(hours,(int,float)) or hours <= 0: raise ValueError('invalid_contract_hours')
+        q=self.projects[project_id]
+        employer_owner=self._owner(e.people.rows[employer])
+        if q.owner != employer_owner or q.place != p.place or q.cell != p.cell: raise ValueError('project_not_employer_workplace')
+        if q.labor_hours + 1e-7 >= q.required_hours: raise ValueError('project_complete')
+        craft=float(p.aptitudes.get('craft',1.0))
+        physical=min(float(hours), max(0., (q.required_hours-q.labor_hours)/craft))
+        if physical <= 1e-8: raise ValueError('project_has_no_work')
+        credited=physical*craft
+        q.labor_hours=min(q.required_hours,q.labor_hours+credited)
+        q.contributors[p.id]=q.contributors.get(p.id,0.)+physical
+        e.ledger.event(e.day,'project_worked',[p.id,employer],cell=p.cell,place=p.place,project=q.id,kind=q.kind,
+                       labor_hours=physical,effective_hours=credited,paid=True)
+        if q.labor_hours+1e-7>=q.required_hours: self._complete(q,p.id)
+        return physical,credited
+
     def _complete(self,q,pid):
         e=self.e
         if q.kind=='clear':
             e.cells.clear([q.cell],e.cfg['projects']['clear_fraction'])
         elif q.kind=='extract':
-            qty=int(e.cfg['projects']['timber_per_extract'])
             if f'c:{q.cell}' not in e.inventory.holders: e.inventory.register(f'c:{q.cell}')
-            e.inventory.create(e.day,'timber',qty,f'c:{q.cell}',q.owner,source='production',process='extract-timber')
+            e.inventory.create(e.day,q.extract_item,q.extract_qty,f'c:{q.cell}',q.owner,source='production',process=f'extract-{q.extract_item}')
             e.inventory.lots[e.inventory.next_id-1].ground_place=q.place
         elif q.kind=='build':
-            bid=e.create_place(q.building,q.cell,q.owner)
+            bid=e.create_place(q.building,q.cell,q.recipient_owner or q.owner)
             q.target_place=bid
         elif q.kind=='repair':
             b=e.places[q.target_place]; b.destroyed_day=None; b.condition=1.0
             spec=e.cfg.building(b.kind); e.inventory.holders[f'b:{b.id}'].store='store' in spec['affordances']
         e.ledger.event(e.day,'project_completed',[pid],cell=q.cell,place=q.place,project=q.id,kind=q.kind,building=q.building,target_place=q.target_place,contributors=sorted(q.contributors))
+        # The ordinary project resolver remains the sole creator of the place.  The
+        # order layer only observes that authoritative completion and closes delivery.
+        e.employment.complete_project_order(q.id,q.target_place)
         del self.projects[q.id]
 
     def state(self): return {'projects':{k:asdict(v) for k,v in self.projects.items()},'next_id':self.next_id}

@@ -53,8 +53,8 @@ def generate(e):
     cfg = e.cfg; pop = cfg['population']; st = cfg['setup']; w = e.world
     stage_days = cfg.derived['stage_days']; order = cfg.derived['stage_order']
     report = {'clusters': [], 'households': 0, 'people': 0, 'skipped_buildings': {}, 'clipped_food': 0, 'subsistence': {},
-              'roles': {}, 'dropped_roles': {}, 'capabilities': {}, 'coin_classes': {}, 'media': 0, 'road_cells': 0,
-              'notable': [], 'warnings': []}
+              'roles': {}, 'dropped_roles': {}, 'capabilities': {}, 'coin_classes': {}, 'media': 0, 'road_cells': 0, 'establishments': {},
+              'notable': [], 'staffing': 0, 'vacancies': 0, 'warnings': []}
     spread = max(1, int(round(pop['cluster_spread_km'] / cfg['units']['cell_km'])))
 
     # ---- 1. cluster seeds: mainland, buildable, weighted by terrain preference (+ water adjacency)
@@ -104,6 +104,9 @@ def generate(e):
     food_item = next(i for i, it in sorted(cfg.catalog['items'].items()) if it['kind'] == 'food' and it['spoil_per_day'] == min(x['spoil_per_day'] for x in cfg.catalog['items'].values() if x['kind'] == 'food'))
     coin_item = next(i for i, it in sorted(cfg.catalog['items'].items()) if it['kind'] == 'coin')
     used_names = set(); farm_cells = set(); first_adult_by_cluster = {}
+    # Stable nearest-lawful-site cache for workplaces whose catalog terrain differs
+    # from the household home cell (notably mines and quarries).
+    nearby_land = {}
     for hid, size in enumerate(sizes):
         gen = e.rng.one('setup', 0, 100 + hid); k = cluster_of[hid]; owner = f'h:{hid}'
         # cell near the seed
@@ -149,38 +152,55 @@ def generate(e):
         sub = st['subsistence_role']
         if sub and not any(q['role'] and _feeds(cfg, roles[q['role']]) for q in people):
             adults = [q for q in people if -q['born'] >= stage_days['youth']]
-            pick = next((q for q in adults[1:] if not q['role']), None) or next((q for q in adults[1:]), None) or (adults[0] if adults else None)
+            # Do not erase the only miner/butcher/chef in a household merely to
+            # install a fallback farm label.  Subsistence may fill an otherwise
+            # unassigned adult; a fully specialised household remains specialised
+            # and must eventually buy food through the economy it helps create.
+            pick = next((q for q in adults[1:] if not q['role']), None)
             if pick is not None and set(roles[sub]['requires']) <= set(pick['caps']):
-                key = 'replaced' if pick['role'] else 'filled'
-                report['subsistence'][key] = report['subsistence'].get(key, 0) + 1
+                report['subsistence']['filled'] = report['subsistence'].get('filled', 0) + 1
                 pick['role'] = sub
-                if pick is people[0]: head_role = sub
             else:
                 report['subsistence']['unfilled'] = report['subsistence'].get('unfilled', 0) + 1
-        # buildings: table rows for anyone + head role, plus the workplace of every food-producing member
+        # buildings: table rows for anyone + head role, plus a real workplace for every
+        # generated role that has one.  This is the settlement bootstrap: operators
+        # are assigned below, rather than arriving in a world of labels but no shops.
         kinds = list(hb.get('anyone', [])) + (list(hb.get(head_role, [])) if head_role else [])
         # Sorted: a set of str iterates in per-process hash order, which once gave two processes different
         # place ids for the same seed (worldgen-v1 finding). Determinism must not depend on PYTHONHASHSEED.
-        for r in sorted({head_role} | {q['role'] for q in people if q['role'] and _feeds(cfg, roles[q['role']])}, key=lambda x: (x is None, x or '')):
+        for r in sorted({q['role'] for q in people if q['role']}, key=lambda x: (x is None, x or '')):
             wp = roles[r]['workplace'] if r else 'none'
             if wp != 'none' and wp in cfg.catalog['buildings'] and wp not in kinds: kinds.append(wp)
         built = {}
         for kind in kinds:
             spec = cfg.building(kind); target = cell
+            allowed = [T[t] for t in spec['terrain_allow']]
             if 'field' in spec['affordances']:
                 # one farm per cell: prefer home cell, else the nearest free allowed cell inside the cluster
-                allowed = [T[t] for t in spec['terrain_allow']]
                 ok = lambda c: c not in farm_cells and int(w.terrain[c]) in allowed and e.cells.fields[c] == 0
-                if not ok(cell):
-                    near = land[np.argsort(w.hex_distance(np.full(len(land), cell), land), kind='stable')]
-                    near = [int(c) for c in near if w.hex_distance(np.array([cell]), np.array([c]))[0] <= spread + 2 and ok(int(c))]
-                    target = near[0] if near else None
+            else:
+                # A household may live on a plain while its mine or quarry occupies
+                # the nearest lawful hill.  That is only setup siting: the operator
+                # still begins at home and must travel through normal movement.
+                ok = lambda c: int(w.terrain[c]) in allowed
+            if not ok(cell):
+                if cell not in nearby_land:
+                    cell_dist = w.hex_distance(np.full(len(land), cell), land)
+                    cell_order = np.argsort(cell_dist, kind='stable')
+                    nearby_land[cell] = (land[cell_order], cell_dist[cell_order])
+                ordered, ordered_dist = nearby_land[cell]
+                # Extractive deposits are sparse.  Unlike farms, a mine may be
+                # farther from its operator's home; use the nearest legal mainland
+                # site rather than silently dropping an otherwise sampled role when
+                # the household's cluster has no hill within its local spread.
+                target = next((int(c) for c in ordered if ok(int(c))), None)
             try:
                 if target is None: raise ValueError('no free cell')
                 built[kind] = e.seed_place(kind, target, owner)
                 if 'field' in spec['affordances']: farm_cells.add(target)
             except (ValueError, NotImplementedError) as exc:
                 report['skipped_buildings'][kind] = report['skipped_buildings'].get(kind, 0) + 1
+                report['warnings'].append(f'household {hid}: {kind} skipped: {exc}')
         homes = [b for k_, b in built.items() if cfg.building(k_)['shelter'] > 0]
         if not homes: raise SetupError(f'household {hid}: [setup.household_buildings] gives no sheltered building')
         home = homes[0]
@@ -204,6 +224,21 @@ def generate(e):
                 try: e.farming.assign(p.id, farm)
                 except ValueError: pass
             if q['band'] == 'adult' and k not in first_adult_by_cluster: first_adult_by_cluster[k] = p.id
+        # Establishment bootstrap: each role-holder becomes the initial operator of
+        # the owned workplace their role calls for. Farms retain their specialized
+        # assignment resolver; all other establishments receive a durable staffing
+        # relationship, not a fabricated wage or a permanent caste.
+        for pid in pids:
+            p=e.people.rows[pid]
+            if not p.role: continue
+            workplace=roles[p.role]['workplace']
+            place=built.get(workplace)
+            if place is not None and place not in e.farming.farms:
+                try:
+                    e.employment.assign_staff(pid, place, p.role, setup=True)
+                except ValueError as exc:
+                    report['warnings'].append(f'household {hid}: staffing {p.role} at {workplace} skipped: {exc}')
+
         # the first youth+ resident keeps the pantry when the household has a separate store and no farm worker to do it
         if home != store and not any(pid in e.farming.assignments for pid in pids):
             keeper = next((pid for pid in pids if e.people.at_least(e.people.rows[pid], 0, 'youth')), None)
@@ -238,6 +273,9 @@ def generate(e):
                 r = e.people.rows[pid].role
                 if r and r in cfg['records']['auto_record'] and r in media_by_role:
                     e.inventory.create(0, media_by_role[r], 1, f'p:{pid}', owner, source='setup', process='initial-media'); report['media'] += 1
+        for kind, place in built.items():
+            if 'workplace' in cfg.building(kind)['affordances']:
+                report['establishments'][kind] = report['establishments'].get(kind, 0) + 1
         report['households'] += 1; report['people'] += len(pids)
 
     # ---- 4. one chronicler per cluster with probability historian_rate x literacy_scale
@@ -268,4 +306,5 @@ def generate(e):
     heads = [pid for pid, p in sorted(e.people.rows.items()) if p.household_id is not None and p.id == min(q.id for q in e.people.rows.values() if q.household_id == p.household_id)]
     report['notable'] = heads[:st['notable_starters']]
     report['farms'] = len(e.farming.farms); report['workers'] = len(e.farming.assignments); report['places'] = len(e.places)
+    report['staffing'] = len(e.employment.staffing); report['vacancies'] = len(e.employment.vacancies)
     return report

@@ -42,6 +42,13 @@ VERBS = {
     "rest":  {"timed": False, "requires": None},
     "work":  {"timed": False, "requires": None},
     "labor": {"timed": True, "requires": None},
+    # Establishment contracts are proposed and collected only while physically present.
+    # They are untimed administrative/custody acts; actual production remains labor.
+    "commission": {"timed": False, "requires": None},
+    "post": {"timed": False, "requires": None},
+    "collect": {"timed": False, "requires": None},
+    # Buy physical stock from a co-present establishment operator; movement/hauling remain separate.
+    "procure": {"timed": False, "requires": None},
     "go":    {"timed": False, "requires": None},
     "haul":  {"timed": False, "requires": None},
     "give":  {"timed": True,  "requires": None},   # pressure-v1: hand carried food to a co-present person (inventory.transfer)
@@ -64,7 +71,7 @@ EVENT_TYPES = frozenset("""
 born conceived pregnancy_lost died bond unbond role_changed moved_home named stage
 departed arrived passed_through encountered journey_abandoned journey_refused migrated
 built repaired decayed destroyed burned
-transfer trade hired paid default contract_done
+transfer trade hired paid default contract contract_done
 say tell confess heard discovered
 court lapsed withdraw convene cancel attend gathering
 accuse judge confined released exiled
@@ -280,7 +287,7 @@ def _load_catalog(raw: dict, themes_dir: str) -> dict:
     if not os.path.exists(path):
         raise ConfigError(f"theme {theme!r}: {path} not found")
     cat = _read_toml(path)
-    for sec in ("roles", "items", "buildings", "crops", "wildlife", "disease"):
+    for sec in ("roles", "items", "buildings", "recipes", "crops", "wildlife", "disease"):
         cat.setdefault(sec, {})
         overlay = raw.get("catalog", {}).get(sec, {})
         if overlay:
@@ -314,6 +321,19 @@ def _validate(raw: dict, cat: dict) -> None:
     if raw.get("schema_version") != SCHEMA_VERSION:
         raise ConfigError("schema_version must be 2")
     roles = set(cat["roles"]); items = set(cat["items"]); buildings = set(cat["buildings"])
+    recipes = cat.get("recipes", {})
+    if not isinstance(recipes, dict): raise ConfigError("catalog.recipes must be a table")
+    for rid, recipe in recipes.items():
+        if not isinstance(recipe, dict): raise ConfigError(f"catalog.recipes.{rid} must be a table")
+        required = {"workplace", "inputs", "output", "output_qty", "labor_hours"}
+        if set(recipe) != required: raise ConfigError(f"catalog.recipes.{rid}: required fields are {sorted(required)}")
+        if recipe["workplace"] not in buildings: raise ConfigError(f"catalog.recipes.{rid}.workplace unknown")
+        if recipe["output"] not in items: raise ConfigError(f"catalog.recipes.{rid}.output unknown")
+        if type(recipe["output_qty"]) is not int or recipe["output_qty"] < 1: raise ConfigError(f"catalog.recipes.{rid}.output_qty must be positive int")
+        if not isinstance(recipe["labor_hours"], (int,float)) or isinstance(recipe["labor_hours"], bool) or recipe["labor_hours"] <= 0: raise ConfigError(f"catalog.recipes.{rid}.labor_hours must be positive")
+        if not isinstance(recipe["inputs"], dict) or not recipe["inputs"]: raise ConfigError(f"catalog.recipes.{rid}.inputs must be nonempty table")
+        for item, qty in recipe["inputs"].items():
+            if item not in items or type(qty) is not int or qty < 1: raise ConfigError(f"catalog.recipes.{rid}.inputs invalid")
     caps = {k for k in raw["capabilities"] if k != "teach_weight"}
     stages = list(raw["stages"])
 
@@ -753,6 +773,13 @@ def _validate_catalog(raw: dict, cat: dict) -> None:
         if "lodging_rate" in b:
             rate = _req(b, "lodging_rate", float, f"buildings.{bid}", 0.0)
             if not math.isfinite(rate): raise ConfigError(f"buildings.{bid}.lodging_rate: nonfinite")
+        if "fire_resistance" in b:
+            _req(b, "fire_resistance", float, f"buildings.{bid}", 0.0, 1.0)
+        if "extracts" in b:
+            if not isinstance(b["extracts"], dict) or not b["extracts"]: raise ConfigError(f"buildings.{bid}.extracts must be a nonempty table")
+            for item, spec in b["extracts"].items():
+                if item not in items or not isinstance(spec, list) or len(spec)!=2 or type(spec[0]) is not int or spec[0]<1 or not isinstance(spec[1], (int,float)) or isinstance(spec[1], bool) or spec[1]<=0:
+                    raise ConfigError(f"buildings.{bid}.extracts.{item} must be [positive integer qty, positive labor hours]")
     for cid, c in cat["crops"].items():
         for key in ("item", "plant_season", "harvest_season", "growth_days", "moisture_min",
                     "moisture_optimal", "moisture_max", "yield_kg_per_ha", "hectares_per_field",

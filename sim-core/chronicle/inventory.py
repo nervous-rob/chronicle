@@ -48,6 +48,9 @@ class Lot:
     health: dict = field(default_factory=dict)  # disease -> S/E/I/R integer counts
     ground_place: int = -1  # exact field/place for ground lots; -1 is unresolved
     origin_event: int | None = None  # harvest ledger pointer; retained through splits
+    # A finished work order may sit at an establishment awaiting its customer's pickup.
+    # It remains customer-owned but cannot be consumed or traded out from under them.
+    order_id: int | None = None
 
 
 
@@ -237,7 +240,7 @@ class Inventory:
         # No remote household teleportation, market freebies, or ground scavenging.
         for holder in dict.fromkeys(holders):
             food = [l for l in self.lots.values() if l.holder == holder and l.owner in owners
-                    and self.cfg.item(l.item)['kind'] == 'food']
+                    and l.order_id is None and self.cfg.item(l.item)['kind'] == 'food']
             for lot in sorted(food, key=lambda l: (-self.cfg.item(l.item)['spoil_per_day'], l.id)):
                 q = min(remaining, lot.qty)
                 self.destroy(day, lot.id, q, 'consume', 'consume')

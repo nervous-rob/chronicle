@@ -11,7 +11,16 @@ chronicler_voice = "plain annalist"
 farmer       = { workplace = "farm",      requires = [], produces = ["grain"],          role_weight = 0.0, enforcement = false }
 herder       = { workplace = "pasture",   requires = [], produces = ["milk", "hide"],   role_weight = 0.0, enforcement = false }
 fisher       = { workplace = "fishery",   requires = [], produces = ["fish"],           role_weight = 0.0, enforcement = false }
-hunter       = { workplace = "none",      requires = [], produces = ["meat", "hide"],   role_weight = 0.1, enforcement = false }
+hunter       = { workplace = "hunters_cabin", requires = [], produces = ["meat", "hide"],   role_weight = 0.1, enforcement = false }
+butcher      = { workplace = "butcher_shop",  requires = [], produces = ["butchered_meat"],    role_weight = 0.2, enforcement = false }
+chef         = { workplace = "restaurant",    requires = [], produces = ["meal"],              role_weight = 0.3, enforcement = false }
+# Distinct extraction roles/workplaces are catalog data.  Their physical output is
+# declared by the workplace `extracts` table below, not a profession-specific resolver.
+iron_miner   = { workplace = "iron_mine", requires = [], produces = ["iron_ore"], role_weight = 0.1, enforcement = false }
+coal_miner   = { workplace = "coal_mine", requires = [], produces = ["coal"], role_weight = 0.1, enforcement = false }
+salt_miner   = { workplace = "salt_mine", requires = [], produces = ["salt"], role_weight = 0.1, enforcement = false }
+quarrier     = { workplace = "quarry", requires = [], produces = ["stone"], role_weight = 0.1, enforcement = false }
+# Compatibility role for saved worlds/themes that still use the generic mine.
 miner        = { workplace = "mine",      requires = [], produces = ["ore", "stone"],   role_weight = 0.1, enforcement = false }
 woodcutter   = { workplace = "woodlot",   requires = [], produces = ["timber"],         role_weight = 0.0, enforcement = false }
 crafter      = { workplace = "workshop",  requires = [], produces = ["tools"],          role_weight = 0.1, enforcement = false }
@@ -41,14 +50,20 @@ vagrant      = { workplace = "none",      requires = [], produces = [],         
 coin    = { kind = "coin",      weight = 0.01, spoil_per_day = 0.0,  price = 1.0 }
 grain   = { kind = "food",      weight = 0.01, spoil_per_day = 0.001, price = 0.02 }
 flour   = { kind = "food",      weight = 0.01, spoil_per_day = 0.003, price = 0.03 }
-meat    = { kind = "food",      weight = 0.01, spoil_per_day = 0.05, price = 0.05 }
+meat           = { kind = "food",      weight = 0.01, spoil_per_day = 0.05, price = 0.05 }
+butchered_meat  = { kind = "food",      weight = 0.01, spoil_per_day = 0.04, price = 0.07 }
+meal           = { kind = "food",      weight = 0.01, spoil_per_day = 0.10, price = 0.15 }
 fish    = { kind = "food",      weight = 0.01, spoil_per_day = 0.08, price = 0.04 }
 milk    = { kind = "food",      weight = 0.01, spoil_per_day = 0.2,  price = 0.03 }
 fodder  = { kind = "material",  weight = 0.01, spoil_per_day = 0.002, price = 0.005 }
 hide    = { kind = "material",  weight = 2.0,  spoil_per_day = 0.0,  price = 3.0 }
 timber  = { kind = "material",  weight = 20.0, spoil_per_day = 0.0,  price = 2.0 }
 ore     = { kind = "material",  weight = 10.0, spoil_per_day = 0.0,  price = 4.0 }
+iron_ore = { kind = "material", weight = 10.0, spoil_per_day = 0.0, price = 5.0 }
+coal    = { kind = "material",  weight = 8.0, spoil_per_day = 0.0, price = 2.0 }
+salt    = { kind = "material",  weight = 1.0, spoil_per_day = 0.0, price = 1.0 }
 stone   = { kind = "material",  weight = 25.0, spoil_per_day = 0.0,  price = 1.0 }
+preserved_meat = { kind = "food", weight = 0.01, spoil_per_day = 0.005, price = 0.12 }
 tools   = { kind = "tool",      weight = 2.0,  spoil_per_day = 0.0,  price = 15.0 }
 wax     = { kind = "material",  weight = 0.05, spoil_per_day = 0.0,  price = 0.5 }
 wagon   = { kind = "vehicle",   weight = 150.0, spoil_per_day = 0.0, price = 120.0, carry_cap_add = 400.0 }
@@ -65,15 +80,25 @@ stele   = { kind = "medium", weight = 200.0, spoil_per_day = 0.0, price = 0.0, c
 # store (kg), shelter (people), confine_cap (people), affordances: closed verbs
 [buildings]
 house      = { terrain_allow = ["plains","forest","hills"], requires = [], store = 60.0,   shelter = 6,  confine_cap = 0, spoil_mult = 1.0, affordances = ["shelter","store"], labor_days = 40.0, materials = { timber = 4 }, decay_per_day = 0.0001, value = 30.0 }
+stone_house = { terrain_allow = ["plains","forest","hills"], requires = [], store = 80.0, shelter = 6, confine_cap = 0, spoil_mult = 1.0, affordances = ["shelter","store"], labor_days = 70.0, materials = { stone = 6, timber = 1 }, fire_resistance = 1.0, decay_per_day = 0.00003, value = 60.0 }
 manor      = { terrain_allow = ["plains","forest","hills"], requires = [], store = 400.0,  shelter = 12, confine_cap = 2, spoil_mult = 1.0, affordances = ["shelter","store","enable:judge","enable:appoint"], labor_days = 400.0, materials = { timber = 20, stone = 20 }, decay_per_day = 0.00005, value = 400.0 }
 granary    = { terrain_allow = ["plains","forest","hills"], requires = [], store = 2000.0, shelter = 0,  confine_cap = 0, spoil_mult = 0.5, affordances = ["store"], labor_days = 60.0, materials = { timber = 6 }, decay_per_day = 0.0001, value = 50.0 }
 farm       = { terrain_allow = ["plains","forest"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","field"], labor_days = 20.0, materials = {}, decay_per_day = 0.0001, value = 20.0 }
 pasture    = { terrain_allow = ["plains","hills"], requires = [], store = 50.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","graze"], labor_days = 10.0, materials = {}, decay_per_day = 0.0001, value = 10.0 }
 fishery    = { terrain_allow = ["plains","forest","hills"], requires = ["water_adjacent"], store = 50.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 20.0, materials = { timber = 2 }, decay_per_day = 0.0002, value = 20.0 }
+hunters_cabin = { terrain_allow = ["plains","forest","hills"], requires = [], store = 100.0, shelter = 2, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","store"], labor_days = 25.0, materials = { timber = 2 }, decay_per_day = 0.0002, value = 25.0 }
 mill       = { terrain_allow = ["plains","forest","hills"], requires = ["river_adjacent"], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:grain>flour"], labor_days = 120.0, materials = { timber = 10, stone = 6 }, decay_per_day = 0.0001, value = 120.0 }
 woodlot    = { terrain_allow = ["forest"], requires = [], store = 200.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 5.0, materials = {}, decay_per_day = 0.0001, value = 5.0 }
+# `extracts` is a data-driven site output: item -> [units, labor hours].
+# Legacy mine remains for compatibility; new worlds can place differentiated sites.
 mine       = { terrain_allow = ["hills","mountains"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 200.0, materials = { timber = 10 }, decay_per_day = 0.0002, value = 150.0 }
+iron_mine  = { terrain_allow = ["hills","mountains"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","store"], labor_days = 200.0, materials = { timber = 10 }, extracts = { iron_ore = [10, 8.0] }, decay_per_day = 0.0002, value = 150.0 }
+coal_mine  = { terrain_allow = ["hills","mountains"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","store"], labor_days = 180.0, materials = { timber = 8 }, extracts = { coal = [12, 8.0] }, decay_per_day = 0.0002, value = 130.0 }
+salt_mine  = { terrain_allow = ["hills","mountains"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","store"], labor_days = 160.0, materials = { timber = 8 }, extracts = { salt = [8, 8.0] }, decay_per_day = 0.0002, value = 120.0 }
+quarry     = { terrain_allow = ["hills","mountains"], requires = [], store = 500.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","store"], labor_days = 140.0, materials = { timber = 6 }, extracts = { stone = [8, 8.0] }, decay_per_day = 0.00015, value = 120.0 }
 smithy     = { terrain_allow = ["plains","forest","hills"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace"], labor_days = 60.0, materials = { timber = 4, stone = 4 }, decay_per_day = 0.0001, value = 60.0 }
+butcher_shop = { terrain_allow = ["plains","forest","hills"], requires = [], store = 150.0, shelter = 0, confine_cap = 0, spoil_mult = 0.8, affordances = ["workplace","store"], labor_days = 40.0, materials = { timber = 3, stone = 2 }, decay_per_day = 0.00015, value = 45.0 }
+restaurant  = { terrain_allow = ["plains","forest","hills"], requires = [], store = 150.0, shelter = 8, confine_cap = 0, spoil_mult = 0.8, affordances = ["workplace","store","public","enable:socialize"], labor_days = 60.0, materials = { timber = 6, stone = 2 }, decay_per_day = 0.00015, value = 70.0 }
 workshop   = { terrain_allow = ["plains","forest","hills"], requires = [], store = 100.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:craft"], labor_days = 40.0, materials = { timber = 4 }, decay_per_day = 0.0001, value = 40.0 }
 market     = { terrain_allow = ["plains","forest","hills"], requires = [], store = 1000.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:trade","pool"], labor_days = 30.0, materials = { timber = 2 }, decay_per_day = 0.0002, value = 30.0 }
 warehouse  = { terrain_allow = ["plains","forest","hills"], requires = [], store = 5000.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["store"], labor_days = 100.0, materials = { timber = 12 }, decay_per_day = 0.0001, value = 100.0 }
@@ -89,6 +114,56 @@ palisade   = { terrain_allow = ["plains","forest","hills"], requires = [], store
 fence      = { terrain_allow = ["plains","forest","hills"], requires = [], store = 0.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["protection"], labor_days = 15.0, materials = { timber = 3 }, decay_per_day = 0.0005, value = 10.0 }
 hall       = { terrain_allow = ["plains","forest","hills"], requires = [], store = 300.0, shelter = 0, confine_cap = 0, spoil_mult = 1.0, affordances = ["workplace","enable:judge","enable:collect_tax","enable:gathering"], labor_days = 200.0, materials = { timber = 12, stone = 12 }, decay_per_day = 0.00005, value = 200.0 }
 jail       = { terrain_allow = ["plains","forest","hills"], requires = [], store = 20.0, shelter = 0, confine_cap = 6, spoil_mult = 1.0, affordances = ["confine"], labor_days = 120.0, materials = { timber = 4, stone = 16 }, decay_per_day = 0.00005, value = 120.0 }
+
+# ---------------------------------------------------------------- recipes
+# Generic establishment work orders use this data, never bespoke profession code.
+[recipes.carpenter_tool]
+workplace = "workshop"
+inputs = { timber = 1 }
+output = "tools"
+output_qty = 1
+labor_hours = 8.0
+
+# A supply chain is expressed as ordinary recipe output and custody transfer.
+# Hunting supplies meat; butcher_shop turns it into a storable food input; restaurant
+# turns that input into a perishable prepared meal. Markets distribute either product
+# through the ordinary trade primitive rather than a bespoke market-production path.
+[recipes.butcher_portion]
+workplace = "butcher_shop"
+inputs = { meat = 10 }
+output = "butchered_meat"
+output_qty = 9
+labor_hours = 8.0
+
+[recipes.restaurant_meal]
+workplace = "restaurant"
+inputs = { butchered_meat = 3 }
+output = "meal"
+output_qty = 3
+labor_hours = 8.0
+
+# Salt is a genuine upstream input: preservation improves shelf life, then the
+# resulting food can be sold in markets or cooked at restaurants.
+[recipes.butcher_preserve]
+workplace = "butcher_shop"
+inputs = { meat = 10, salt = 1 }
+output = "preserved_meat"
+output_qty = 9
+labor_hours = 8.0
+
+[recipes.restaurant_preserved_meal]
+workplace = "restaurant"
+inputs = { preserved_meat = 3 }
+output = "meal"
+output_qty = 3
+labor_hours = 8.0
+
+[recipes.smith_tools]
+workplace = "smithy"
+inputs = { iron_ore = 2, coal = 1 }
+output = "tools"
+output_qty = 1
+labor_hours = 8.0
 
 # ---------------------------------------------------------------- crops (ECOLOGY)
 [crops]

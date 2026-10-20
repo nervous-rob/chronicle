@@ -213,7 +213,10 @@ class Farming:
         return [l for l in self.e.inventory.lots.values() if l.holder == holder and l.owner == owner and self.e.cfg.item(l.item)['kind'] == 'food']
 
     def _goods(self, holder, owner):
-        return [l for l in self.e.inventory.lots.values() if l.holder == holder and l.owner == owner and self.e.cfg.item(l.item)['kind'] in ('food','material','coin')]
+        # Finished orders remain customer-owned at the establishment but are sealed
+        # to everyone until collect_order performs the named pickup handoff.
+        return [l for l in self.e.inventory.lots.values() if l.holder == holder and l.owner == owner
+                and l.order_id is None and self.e.cfg.item(l.item)['kind'] in ('food','material','coin')]
 
     def _at_holder(self, p, holder, lot=None):
         if holder == f'p:{p.id}': return True
@@ -222,14 +225,14 @@ class Farming:
             return b.destroyed_day is None and b.owner in self.e.people.owners(p)
         return bool(lot and holder == f'c:{p.cell}' and p.place >= 0 and lot.ground_place == p.place)
 
-    def move_food(self, pid, src, dst, owner, limit=None):
+    def move_food(self, pid, src, dst, owner, limit=None, item=None):
         """Custody-only pickup/deposit at the exact place, with capacity/time preflight."""
         p = self._person(pid); e = self.e
         if pid in self.journeys or owner not in e.people.owners(p): raise ValueError('in transit or unauthorized owner')
         if src == dst or (src != f'p:{pid}' and dst != f'p:{pid}'):
             raise ValueError('goods must physically pass through their carrier')
         if dst not in e.inventory.holders or not self._at_holder(p, dst): raise ValueError('destination not accessible')
-        lots = sorted(self._goods(src, owner), key=lambda l:l.id)
+        lots = sorted((l for l in self._goods(src, owner) if item is None or l.item == item), key=lambda l:l.id)
         if any(not self._at_holder(p, src, l) for l in lots): raise ValueError('source not at exact place')
         kg = min(self._free_kg(dst), self.budgets[pid] * self.cfg['handling_kg_per_hour'])
         left = math.inf if limit is None else limit
@@ -244,6 +247,39 @@ class Farming:
         e.inventory.transfer(self.day, legs, actors=[pid], cell=p.cell, place=p.place, reason='haul')
         self._spend(pid, mass / self.cfg['handling_kg_per_hour'], 'haul')
         return total
+
+    def hired_field_open(self, place, activity):
+        """Whether a public paid field shift can still add real seasonal crop labor."""
+        e = self.e; f = self.farms.get(place)
+        if f is None or activity not in ('plant', 'harvest') or e.places[place].destroyed_day is not None: return False
+        cell = e.places[place].cell; cr = e.cells.crop; year = e.day // 365
+        if activity == 'plant':
+            return season_of(e.day) == cr['plant_season'] and not e.cells.planted[cell] and f.last_plant_year != year
+        return season_of(e.day) == cr['harvest_season'] and bool(e.cells.planted[cell])
+
+    def hired_field_work(self, pid, place, activity):
+        """A paid stranger's one-shift contribution to an owned farm.
+
+        The worker must be physically present. Only the farm owner can have posted
+        the shift through Employment; the worker borrows neither ownership nor role.
+        """
+        p = self._person(pid); e = self.e
+        if pid in self.journeys or p.place != place or not self.hired_field_open(place, activity): return 0.0
+        f = self.farms[place]; cell = e.places[place].cell; cr = e.cells.crop
+        key = 'plant_hours' if activity == 'plant' else 'harvest_hours'
+        need = f.fields * cr['hectares_per_field'] * self.cfg[f'{activity}_labor_days_per_ha'] * self.cfg['activity_hours_per_day']
+        used = min(float(e.cfg['agency']['action_hours']['labor']), self.budgets[pid], max(0., need - getattr(f, key)))
+        if used <= 1e-8: return 0.0
+        setattr(f, key, getattr(f, key) + used)
+        self.labor.append({'day':self.day, 'person':pid, 'farm':f.place, 'activity':activity, 'hours':used, 'paid':True})
+        if getattr(f, key) >= need - 1e-7:
+            if activity == 'plant':
+                e.cells.plant(self.day, np.array([cell]), e.ledger, actors=[pid], place=f.place)
+                f.last_plant_year = e.day // 365
+            else:
+                e.inventory.receive_harvest(self.day, e.cells, [cell], owner=f.owner, place=f.place, actors=[pid])
+            setattr(f, key, 0.)
+        return used
 
     def field_work(self, pid, activity, hours=None):
         p = self._person(pid); e = self.e
@@ -381,7 +417,14 @@ class Farming:
             if p.alive and not p.busy and pid not in self.e.agency.agents: self.automatic(pid)
         for pid in sorted(self.keepers):
             p = self.e.people.rows[pid]
-            if p.alive and not p.busy and pid not in self.e.agency.agents and pid not in self.assignments: self.keep(pid)
+            # Pantry keeping is the household's established food-access routine, not
+            # a discretionary occupation.  A resident may also have a bounded
+            # establishment policy (for example, a miner who is the only adult at
+            # home), but binding that policy must not silently disable the physical
+            # trip that makes their household's owned grain edible.  The keeper
+            # spends ordinary time first; any later policy action sees only the
+            # remaining legal menu and budget.
+            if p.alive and not p.busy and pid not in self.assignments: self.keep(pid)
 
     def state(self):
         return {'farms':{k:asdict(v) for k,v in self.farms.items()}, 'assignments':self.assignments,

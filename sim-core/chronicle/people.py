@@ -40,6 +40,9 @@ class Person:
     capabilities: set = field(default_factory=set)
     learning: dict = field(default_factory=dict)
     traits: tuple = ()
+    # Continuous learned/natural work modifiers. Occupations are assignments and
+    # contracts, never an exclusive character class. 1.0 is ordinary effectiveness.
+    aptitudes: dict = field(default_factory=dict)
     needs: dict = field(default_factory=lambda: {k: 1.0 for k in ('food', 'health', 'rest', 'shelter', 'social', 'safety')})
     expectations: dict = field(default_factory=dict)
     memory: dict = field(default_factory=dict)  # event id -> source/fidelity/day
@@ -70,11 +73,14 @@ class People:
         self._teaching_day = -1
 
     def add(self, born_day, cell, place=-1, *, day=0, household_id=None, name=None,
-            role=None, capabilities=(), traits=(), sex='unspecified', parents=(), emit_birth=False,
+            role=None, capabilities=(), traits=(), aptitudes=None, sex='unspecified', parents=(), emit_birth=False,
             designated_heir=None, estate_owner=False):
         if type(born_day) is not int or born_day > day or type(cell) is not int or cell < 0:
             raise PeopleError('invalid birth day or cell')
         if role is not None and role not in self.cfg.catalog['roles']: raise PeopleError('unknown role')
+        if aptitudes is None: aptitudes = {}
+        if (type(aptitudes) is not dict or any(type(k) is not str or not k or isinstance(v, bool) or not isinstance(v, (int, float)) or float(v) <= 0 for k,v in aptitudes.items())):
+            raise PeopleError('aptitudes must be a positive numeric mapping')
         if sex not in ('unspecified', 'female', 'male'): raise PeopleError('invalid sex')
         if any(type(pid) is not int or pid not in self.rows for pid in parents): raise PeopleError('unknown parent')
         if emit_birth and born_day != day: raise PeopleError('born event must be on actual birth day')
@@ -85,7 +91,8 @@ class People:
         pid = len(self.rows)
         p = Person(pid, born_day, cell, place, sex=sex, household_id=household_id, home_place=place,
                    name=name, role=role, role_since_day=day, parents=list(parents), designated_heir=designated_heir,
-                   estate_owner=bool(estate_owner), capabilities=set(capabilities), traits=tuple(traits))
+                   estate_owner=bool(estate_owner), capabilities=set(capabilities), traits=tuple(traits),
+                   aptitudes={str(k): float(v) for k,v in aptitudes.items()})
         p.stage_seen = self.stage(p, day)
         if role is not None and not self.at_least(p, day, 'youth'):
             raise PeopleError('too young for a role')

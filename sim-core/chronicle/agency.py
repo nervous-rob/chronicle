@@ -213,6 +213,243 @@ class MarketPolicy:
         return {'kind': 'work'} if 'work' in menu else {'kind': 'rest'}
 
 
+class EstablishmentPolicy:
+    """A deliberately small local routine for staffed recipe establishments.
+
+    The policy never sees shop stock, remote suppliers, or another person's money.
+    It only responds to the ordinary local action menu: a customer commissions an
+    allowed recipe when co-present with a provider, an operator posts an accepted
+    order, a hand takes a visible local shift, and the named customer collects the
+    ready physical output.  Modes are explicit so a settlement bootstrap can bind
+    different residents without turning a role label into a permanent occupation.
+    """
+    name = 'establishment-routine'
+
+    def __init__(self, mode, recipes=(), wage=1, price=1, stock_targets=None, suppliers=(), establishment=None, products=(), provisions=(), provision_reserve=0, upstream_orders=(), visit_period=7):
+        if mode not in ('customer', 'operator', 'worker', 'producer'):
+            raise ValueError('establishment mode must be customer, operator, worker, or producer')
+        if type(wage) is not int or wage < 1 or type(price) is not int or price < 1:
+            raise ValueError('establishment wage and price must be positive integers')
+        self.mode = mode
+        self.recipes = tuple(sorted(set(recipes)))
+        self.wage = wage
+        self.price = price
+        # Explicit commercial relationships are policy inputs, not inferred remote
+        # knowledge: (supplier_place, item, target_qty).  The ordinary menu must
+        # still make every route, purchase, and haul legal at runtime.
+        if stock_targets is None: stock_targets = {}
+        if not isinstance(stock_targets, dict) or any(not isinstance(k, str) or type(v) is not int or v < 1 for k, v in stock_targets.items()):
+            raise ValueError('stock_targets must map item ids to positive integers')
+        self.stock_targets = dict(sorted(stock_targets.items()))
+        parsed=[]
+        for row in suppliers:
+            if not isinstance(row, (tuple, list)) or len(row) != 3 or type(row[0]) is not int or not isinstance(row[1], str) or type(row[2]) is not int or row[2] < 1:
+                raise ValueError('suppliers must be (place, item, qty) triples')
+            parsed.append((row[0], row[1], row[2]))
+        self.suppliers = tuple(sorted(parsed))
+        if establishment is not None and type(establishment) is not int:
+            raise ValueError('establishment must be an integer place id or None')
+        self.establishment = establishment
+        if not isinstance(products, (tuple, list)) or not all(isinstance(item, str) for item in products):
+            raise ValueError('products must be item id strings')
+        self.products = tuple(sorted(set(products)))
+        if not isinstance(provisions, (tuple, list)) or not all(isinstance(item, str) for item in provisions):
+            raise ValueError('provisions must be item id strings')
+        if type(provision_reserve) is not int or provision_reserve < 0:
+            raise ValueError('provision_reserve must be a nonnegative integer')
+        # Provision identities and reserve are explicit policy inputs supplied by
+        # setup/configuration. They do not reveal a remote store or create food.
+        self.provisions = tuple(sorted(set(provisions)))
+        self.provision_reserve = provision_reserve
+        parsed_orders=[]
+        for row in upstream_orders:
+            if not isinstance(row, (tuple, list)) or len(row) != 3 or type(row[0]) is not int or not isinstance(row[1], str) or type(row[2]) is not int or row[2] < 1:
+                raise ValueError('upstream_orders must be (place, recipe, price) triples')
+            parsed_orders.append((row[0], row[1], row[2]))
+        if type(visit_period) is not int or visit_period < 1:
+            raise ValueError('visit_period must be a positive integer')
+        self.upstream_orders = tuple(sorted(parsed_orders)); self.visit_period = visit_period
+        self.destinations = tuple(sorted(set(([establishment] if establishment is not None else []) + [place for place, _item, _qty in self.suppliers] + [place for place, _recipe, _price in self.upstream_orders])))
+
+    def decide(self, packet):
+        menu = {row['kind']: row for row in packet['menu']}
+        pid = packet['self']['id']; place = packet['here']['place']; home = packet['self']['home']
+        carried = packet['at_hand'].get(f'p:{pid}', {})
+        carried_provisions = sum(carried.get(item, 0) for item in self.provisions)
+        # A route already begun is a present commitment, not a new commercial
+        # preference.  Continue it before considering orders or stock targets.
+        # Without this, an operator en route to a supplier falls through to rest
+        # because they are at neither endpoint.
+        transit = packet['self'].get('in_transit')
+        if transit is not None and 'go' in menu and transit['target'] in menu['go']['places']:
+            return {'kind': 'go', 'place': transit['target']}
+        # Shopkeepers and customers are residents before they are economic labels.
+        # They may pack a finite, owned ration at their own home before a cross-cell
+        # commercial trip, using the same physical haul action as anyone else.
+        # This permits travel; it neither creates food nor reveals distant stock.
+        if self.mode in ('customer', 'operator') and self.provision_reserve and home is not None \
+                and place == home and carried_provisions == 0 and 'haul' in menu:
+            item = next((x for x in self.provisions if packet['at_hand'].get(f'b:{home}', {}).get(x, 0) > 0), None)
+            room = int(packet['self'].get('carry_room_kg', 0) / max(1e-12, 0.01))
+            if item is not None and room > 0 and f'b:{home}' in menu['haul']['sources']:
+                return {'kind': 'haul', 'from': f'b:{home}', 'to': f'p:{pid}', 'item': item,
+                        'limit': min(self.provision_reserve, room)}
+        if self.mode == 'customer':
+            target = self.establishment
+            # A diner cannot prepay with coin left in their household store. Before
+            # setting out, take only the stated meal price as a physical travel
+            # float; the restaurant remains unknown except for the named destination.
+            if target is not None and home is not None and place == home and carried.get('coin', 0) < self.price and 'haul' in menu:
+                home_stock = packet['at_hand'].get(f'b:{home}', {})
+                if home_stock.get('coin', 0) > 0 and f'b:{home}' in menu['haul']['sources']:
+                    return {'kind': 'haul', 'from': f'b:{home}', 'to': f'p:{pid}', 'item': 'coin',
+                            'limit': min(self.price - carried.get('coin', 0), home_stock['coin'])}
+            if target is not None and packet['here']['place'] != target:
+                if 'go' in menu and target in menu['go']['places']: return {'kind': 'go', 'place': target}
+                return {'kind': 'rest'}
+            ready = menu.get('collect', {}).get('orders', ())
+            if ready: return {'kind': 'collect', 'order': ready[0]['id']}
+            if target is None or (packet['day'] + pid) % self.visit_period == 0:
+                offer = menu.get('commission')
+                if offer is not None:
+                    for provider in offer['providers']:
+                        recipe = next((r for r in provider['recipes'] if not self.recipes or r in self.recipes), None)
+                        if recipe is not None and self.price <= offer['max_price']:
+                            return {'kind': 'commission', 'provider': provider['id'], 'recipe': recipe, 'price': self.price, 'due_day': packet['day'] + max(self.visit_period, 2)}
+        elif self.mode == 'producer':
+            # Primary production is deliberately narrow: reach one's assigned physical
+            # workplace, extract/hunt there, then move the resulting owned lot into
+            # that workplace's store. It receives neither demand forecasts nor remote
+            # stock knowledge; every action is an ordinary menu action.
+            pid = packet['self']['id']; place = packet['here']['place']
+            target = self.establishment if self.establishment is not None else place
+            home = packet['self']['home']
+            carried = packet['at_hand'].get(f'p:{pid}', {})
+            ground = packet['at_hand'].get(f"c:{packet['here']['cell']}", {})
+            carried_provisions = sum(carried.get(item, 0) for item in self.provisions)
+            # A generated specialist is still a household resident. Before leaving
+            # its home it physically loads a finite ration; after that reserve falls
+            # below half it returns by the ordinary route. This is local custody,
+            # not a remote meal entitlement, and leaves the existing worker/project
+            # loop otherwise unchanged.
+            if self.provision_reserve and home is not None:
+                if place == home and carried_provisions == 0 and 'haul' in menu:
+                    item = next((x for x in self.provisions if packet['at_hand'].get(f'b:{home}', {}).get(x, 0) > 0), None)
+                    room = int(packet['self'].get('carry_room_kg', 0) / max(1e-12, 0.01))
+                    if item is not None and room > 0 and f'b:{home}' in menu['haul']['sources']:
+                        return {'kind': 'haul', 'from': f'b:{home}', 'to': f'p:{pid}', 'item': item,
+                                'limit': min(self.provision_reserve - carried_provisions, room)}
+                if place == target and carried_provisions <= self.provision_reserve // 2 and home != target:
+                    if 'go' in menu and home in menu['go']['places']:
+                        return {'kind': 'go', 'place': home}
+            if place != target:
+                if 'go' in menu and target in menu['go']['places']:
+                    return {'kind': 'go', 'place': target}
+                return {'kind': 'rest'}
+            for item in self.products:
+                if carried.get(item, 0) > 0 and 'haul' in menu:
+                    return {'kind': 'haul', 'from': f'p:{pid}', 'to': f'b:{target}', 'item': item, 'limit': carried[item]}
+                if ground.get(item, 0) > 0 and 'haul' in menu:
+                    return {'kind': 'haul', 'from': f"c:{packet['here']['cell']}", 'to': f'p:{pid}', 'item': item, 'limit': ground[item]}
+            offer = menu.get('project')
+            if offer is not None:
+                for row in offer['offers']:
+                    if row.get('continue') and row.get('kind') == 'extract':
+                        return {'kind': 'project', 'id': row['id']}
+                for row in offer['offers']:
+                    if row.get('kind') == 'extract':
+                        item = next((x for x in row.get('items', ()) if x in self.products), None)
+                        if item is not None:
+                            return {'kind': 'project', 'project': 'extract', 'item': item}
+            hunt = menu.get('hunt')
+            if hunt is not None and 'meat' in self.products and hunt['targets']:
+                return {'kind': 'hunt', 'target': hunt['targets'][0]}
+        elif self.mode == 'operator':
+            target = self.establishment if self.establishment is not None else place
+            # First arrive at one's own workplace.  Supplier and customer actions
+            # are deliberately not considered while standing at home or on the road.
+            if place != target:
+                # If this person already carries a configured purchased input, its
+                # destination is their own shop. Otherwise an operator may start at
+                # a supplier (as in a local market), but never acts from an unrelated
+                # third place.
+                carrying_input = any(carried.get(item, 0) > 0 for item in self.stock_targets)
+                at_supplier = any(place == supplier for supplier, _item, _qty in self.suppliers)
+                at_upstream = any(place == supplier for supplier, _recipe, _price in self.upstream_orders)
+                if carrying_input or not (at_supplier or at_upstream):
+                    if 'go' in menu and target in menu['go']['places']:
+                        return {'kind': 'go', 'place': target}
+                    return {'kind': 'rest'}
+            local = packet['at_hand'].get(f'b:{target}', {}) if place == target else {}
+            # Accepted local work takes priority over replenishment. Inputs for an
+            # open recipe order have already been physically reserved, so treating
+            # that reservation as a fresh stock deficit would strand the customer's
+            # order while the proprietor repeatedly seeks another supplier batch.
+            if place == target:
+                labor = menu.get('labor')
+                if labor is not None:
+                    job = next((j for j in labor['offers'] if j['activity'] == 'order'), None)
+                    if job is not None: return {'kind': 'labor', 'job': job['id']}
+                offer = menu.get('post')
+                if offer is not None and self.wage <= offer['max_wage']:
+                    return {'kind': 'post', 'order': offer['orders'][0]['id'], 'wage': self.wage}
+            # Return an input/output already in the operator's physical custody
+            # before considering another supplier journey. This makes collection a
+            # real state transition: supplier pickup -> return -> shop stock.
+            carried_target = next((item for item in self.stock_targets if carried.get(item, 0) > 0), None)
+            if carried_target is not None:
+                if place != target and 'go' in menu and target in menu['go']['places']:
+                    return {'kind': 'go', 'place': target}
+                if place == target and 'haul' in menu and f'p:{pid}' in menu['haul']['sources'] and f'b:{target}' in menu['haul']['destinations']:
+                    return {'kind': 'haul', 'from': f'p:{pid}', 'to': f'b:{target}', 'item': carried_target, 'limit': carried[carried_target]}
+            lacking_for_order = any(local.get(item, 0) < needed for item, needed in self.stock_targets.items())
+            upstream = self.upstream_orders[0] if self.upstream_orders and lacking_for_order else None
+            if upstream is not None:
+                supplier, recipe, price = upstream
+                if place == supplier:
+                    ready = menu.get('collect', {}).get('orders', ())
+                    if ready: return {'kind': 'collect', 'order': ready[0]['id']}
+                    # An upstream buyer has already paid the cost of the trip and is
+                    # physically at the named supplier. Ordering is therefore not a
+                    # periodic browsing preference: commission the locally advertised
+                    # recipe at the first lawful opportunity, then remain available to
+                    # collect its own ready output. The order itself is the durable
+                    # observable protocol state; no hidden remote queue is assumed.
+                    offer = menu.get('commission')
+                    if offer is not None and price <= offer['max_price']:
+                        provider = next((row for row in offer['providers'] if recipe in row['recipes']), None)
+                        if provider is not None:
+                            return {'kind': 'commission', 'provider': provider['id'], 'recipe': recipe, 'price': price, 'due_day': packet['day'] + max(self.visit_period, 2)}
+                    return {'kind': 'rest'}
+                elif place == target:
+                    if carried.get('coin', 0) == 0 and local.get('coin', 0) >= price and 'haul' in menu: return {'kind': 'haul', 'from': f'b:{target}', 'to': f'p:{pid}', 'item': 'coin', 'limit': price}
+                    if carried.get('coin', 0) >= price and 'go' in menu and supplier in menu['go']['places']: return {'kind': 'go', 'place': supplier}
+            lacking = next((item for item, needed in self.stock_targets.items() if local.get(item, 0) < needed), None)
+            if lacking is not None:
+                supply = next((x for x in self.suppliers if x[1] == lacking), None)
+                # At a named supplier, accept only its locally advertised physical lot.
+                procure = menu.get('procure')
+                if procure is not None:
+                    offer = next((x for x in procure['offers'] if x['place'] == (supply[0] if supply else -1) and x['item'] == lacking), None)
+                    if offer is not None:
+                        qty=min(supply[2], offer['qty'])
+                        total=max(1, int(round(qty * float(offer['unit_price']))))
+                        if qty > 0 and total <= carried.get('coin', 0):
+                            return {'kind': 'procure', 'provider': offer['provider'], 'lot': offer['lot'], 'qty': qty}
+                # Pick up only enough physical coin to buy the configured local batch.
+                if supply is not None and carried.get('coin', 0) == 0 and local.get('coin', 0) > 0 and 'haul' in menu:
+                    return {'kind': 'haul', 'from': f'b:{place}', 'to': f'p:{pid}', 'limit': min(local['coin'], supply[2])}
+                if supply is not None and place != supply[0] and carried.get('coin', 0) > 0 and 'go' in menu and supply[0] in menu['go']['places']:
+                    return {'kind': 'go', 'place': supply[0]}
+        else:
+            offer = menu.get('labor')
+            if offer is not None:
+                job = next((j for j in offer['offers'] if j['activity'] == 'order'), None)
+                if job is not None:
+                    return {'kind': 'labor', 'job': job['id']}
+        return {'kind': 'rest'}
+
+
 class ReplayPolicy:
     """Replays a saved decision log. Refuses to continue when the observed packet differs
     from the one the original decision was made on (replay divergence)."""
@@ -415,7 +652,7 @@ class Agency:
             'day': day, 'season': season_of(day),
             'self': {'id': pid, 'name': p.name, 'stage': e.people.stage(p, day), 'role': p.role, 'household': p.household_id,
                      'capabilities': sorted(p.capabilities), 'learning': {k: round(v, 4) for k, v in sorted(p.learning.items())},
-                     'traits': list(p.traits), 'home': p.home_place, 'hours_left': round(float(f.budgets[pid]), 6),
+                     'traits': list(p.traits), 'home': p.home_place, 'carry_room_kg': round(max(0., e.cfg['people']['carry_cap'] - e.inventory.weight(f'p:{pid}')), 6), 'hours_left': round(float(f.budgets[pid]), 6),
                      'last_action': p.last_action,
                      'in_transit': None if j is None else {'target': j.target, 'hours_to_next_cell': round(j.remaining, 4)}},
             'jobs': e.employment.offers(p),
@@ -458,8 +695,71 @@ class Agency:
         if p.id in f.assignments: return {'kind': 'work', 'farm': f.assignments[p.id]}
         return {'kind': 'work', 'household': f.keepers[p.id]} if p.id in f.keepers else None   # keepers: pantry routine
     def _offer_labor(self, p, **_):
-        offers = [{'id': j.id, 'wage': j.wage, 'slots': j.slots} for j in self.e.employment.available_here(p)]
+        offers = [{'id': j.id, 'wage': j.wage, 'slots': j.slots, 'activity': j.activity} for j in self.e.employment.available_here(p)]
         return {'kind': 'labor', 'offers': offers} if offers else None
+
+    def _offer_commission(self, p, company, **_):
+        """Recipes are advertised only at their physical establishment.
+
+        The menu exposes the provider and recipes available *here*, never another
+        establishment's stock, till, or unaccepted capacity. Price and due day are
+        negotiated terms bounded by the customer's carried coin and current day.
+        """
+        e=self.e
+        if p.place < 0 or p.id in e.farming.journeys: return None
+        here=e.places.get(p.place)
+        if here is None or here.destroyed_day is not None or 'workplace' not in e.cfg.building(here.kind)['affordances']: return None
+        mine=e.people.owners(p)
+        coin=sum(l.qty for l in e.inventory.lots.values() if l.holder==f'p:{p.id}' and l.owner in mine and l.item=='coin')
+        if coin < 1: return None
+        providers=[]
+        for c in company:
+            q=e.people.rows[c['id']]
+            if here.owner not in e.people.owners(q): continue
+            recipes=sorted(rid for rid,spec in e.cfg.catalog.get('recipes',{}).items() if spec['workplace']==here.kind)
+            if recipes: providers.append({'id':q.id,'recipes':recipes})
+        return {'kind':'commission','providers':providers,'max_price':coin,'earliest_due_day':e.day} if providers else None
+
+    def _offer_post(self, p, **_):
+        """A provider at their own shop may turn an accepted order into a visible shift."""
+        e=self.e
+        if p.place < 0 or p.id in e.farming.journeys: return None
+        owner=e.people.owners(p)
+        till=sum(l.qty for l in e.inventory.lots.values() if l.holder==f'b:{p.place}' and l.owner in owner and l.item=='coin')
+        orders=[{'id':q.id,'recipe':q.recipe,'required_hours':q.required_hours,'labor_hours':q.labor_hours}
+                for q in sorted(e.employment.work_orders.values(),key=lambda q:q.id)
+                if q.provider==p.id and q.place==p.place and q.status=='open']
+        return {'kind':'post','orders':orders,'max_wage':till} if orders and till > 0 else None
+
+    def _offer_collect(self, p, **_):
+        e=self.e
+        ready=[{'id':q.id,'output':q.output,'qty':q.output_qty}
+               for q in sorted(e.employment.work_orders.values(),key=lambda q:q.id)
+               if q.customer==p.id and q.place==p.place and q.recipe is not None and q.status=='ready']
+        return {'kind':'collect','orders':ready} if ready else None
+
+    def _offer_procure(self, p, company, **_):
+        """Locally advertised establishment stock for an immediate physical purchase."""
+        e=self.e
+        if p.place < 0 or p.id in e.farming.journeys: return None
+        carried_coin=sum(l.qty for l in e.inventory.lots.values() if l.holder==f'p:{p.id}' and l.owner in e.people.owners(p) and l.item=='coin')
+        if carried_coin < 1: return None
+        offers=[]
+        for c in company:
+            provider=e.people.rows[c['id']]
+            if e.places[p.place].owner not in e.people.owners(provider): continue
+            provider_owner=f'h:{provider.household_id}' if provider.household_id is not None else f'p:{provider.id}'
+            for lot in sorted(e.inventory.lots.values(), key=lambda x:x.id):
+                # A proprietor may sell a lot personally owned by them or by their
+                # household, but only while it is visibly stocked at their own shop.
+                # This matters for hunted/extracted goods: production initially belongs
+                # to the worker who produced it, and arrival at the shop is custody, not
+                # an implicit title transfer.
+                if lot.holder != f'b:{p.place}' or lot.owner not in e.people.owners(provider) or lot.order_id is not None or lot.item == 'coin': continue
+                if e.cfg.item(lot.item)['kind'] not in ('food','material','tool','medium','livestock','vehicle'): continue
+                unit_price=float(e.cfg.item(lot.item)['price'])
+                offers.append({'provider':provider.id,'place':p.place,'lot':lot.id,'item':lot.item,'qty':lot.qty,'unit_price':unit_price,'owner':lot.owner})
+        return {'kind':'procure','offers':offers} if offers else None
 
     def _offer_go(self, p, packet, **_):
         j = self.e.farming.journeys.get(p.id)
@@ -469,6 +769,11 @@ class Agency:
             go = [b['id'] for b in packet['here']['places'] if not b['destroyed'] and not b['here']]
             # Known ownerless public places are destinations, not visible remote stock.
             go += [b['id'] for b in packet.get('known_places', []) if not b['destroyed']]
+            # A visible job offer names its physical workplace.  It does not reveal
+            # the employer's till, inventory, or future slots; it merely lets a
+            # worker travel to the place whose locally known offer they saw.
+            go += [j['place'] for j in packet.get('jobs', [])]
+            go += sorted(getattr(self.policies.get(p.id), 'destinations', ()))
             go = list(dict.fromkeys(go))
         return {'kind': 'go', 'places': go} if go else None
     def _offer_haul(self, p, packet, at_own, **_):
@@ -477,7 +782,8 @@ class Agency:
         sources = [h for h, stock in packet['at_hand'].items() if any(cfg.item(i)['kind'] in ('food','material','coin') for i in stock)]
         if not sources: return None
         return {'kind': 'haul', 'sources': sources, 'destinations': [f'p:{pid}'] + ([f'b:{p.place}'] if at_own else []),
-                'owners': sorted(e.people.owners(p)), 'kg_per_hour': f.cfg['handling_kg_per_hour']}
+                'owners': sorted(e.people.owners(p)), 'items': sorted({item for h in sources for item in packet['at_hand'][h]
+                if cfg.item(item)['kind'] in ('food','material','coin')}), 'kg_per_hour': f.cfg['handling_kg_per_hour']}
     def _carried_food(self, p):
         e = self.e; owners = e.people.owners(p)
         return sorted((l for l in e.inventory.lots.values() if l.holder == f'p:{p.id}' and l.owner in owners and e.cfg.item(l.item)['kind'] == 'food'), key=lambda l: l.id)
@@ -626,6 +932,46 @@ class Agency:
         if type(jid) is not int or not any(x['id'] == jid for x in entry['offers']): return False, 'not_on_menu'
         hours = self._timed(p.id, 'labor')
         self.e.employment.work(p, jid); self.e.farming._spend(p.id, hours, 'labor'); return True, None
+    def _do_commission(self, p, a, entry):
+        provider, recipe, price, due = a.get('provider'), a.get('recipe'), a.get('price'), a.get('due_day')
+        allowed=next((x for x in entry['providers'] if x['id']==provider),None)
+        if allowed is None or recipe not in allowed['recipes']: return False, 'not_on_menu'
+        if type(price) is not int or not 1 <= price <= entry['max_price'] or type(due) is not int or due < entry['earliest_due_day']: return False, 'invalid_terms'
+        self.e.employment.commission_recipe(p.id,provider,p.place,recipe,price,due)
+        return True, None
+    def _do_post(self, p, a, entry):
+        order,wage=a.get('order'),a.get('wage')
+        if type(order) is not int or not any(x['id']==order for x in entry['orders']): return False, 'not_on_menu'
+        if type(wage) is not int or not 1 <= wage <= entry['max_wage']: return False, 'invalid_wage'
+        self.e.employment.post_order_shift(order,wage)
+        return True, None
+    def _do_collect(self, p, a, entry):
+        order=a.get('order')
+        if type(order) is not int or not any(x['id']==order for x in entry['orders']): return False, 'not_on_menu'
+        self.e.employment.collect_order(p.id,order)
+        return True, None
+
+    def _do_procure(self, p, a, entry):
+        e=self.e; provider, lid, qty=a.get('provider'), a.get('lot'), a.get('qty')
+        offer=next((x for x in entry['offers'] if x['provider']==provider and x['lot']==lid), None) if type(provider) is int and type(lid) is int else None
+        if offer is None or type(qty) is not int or not 1 <= qty <= offer['qty']: return False, 'not_on_menu'
+        seller=e.people.rows[provider]
+        if not e.people.co_present(p,seller): return False, 'not_co_present'
+        unit=float(e.cfg.item(offer['item'])['price']); price=max(1,int(round(qty*unit)))
+        coins=[x for x in e.inventory.lots.values() if x.holder==f'p:{p.id}' and x.owner in e.people.owners(p) and x.item=='coin']
+        if sum(x.qty for x in coins) < price: return False, 'insufficient_coin'
+        buyer_owner=f'h:{p.household_id}' if p.household_id is not None else f'p:{p.id}'
+        # The visible offer carries the actual owner of the selected lot.  Do not
+        # mint a household title when a worker is selling their own catch/material.
+        seller_owner=offer['owner']
+        legs=[Leg(lid,qty,f'p:{p.id}',buyer_owner)]; left=price
+        for coin in sorted(coins,key=lambda x:x.id):
+            take=min(left,coin.qty)
+            if take: legs.append(Leg(coin.id,take,f'b:{p.place}',seller_owner)); left-=take
+            if not left: break
+        e.inventory.transfer(e.day,legs,actors=(provider,p.id),cell=p.cell,place=p.place,reason='establishment-procurement')
+        e.ledger.event(e.day,'trade',[provider,p.id],cell=p.cell,place=p.place,item=offer['item'],qty=qty,unit_price=unit,price=price,seller_lot=lid,reason='establishment-procurement')
+        return True, None
 
     def _do_work(self, p, a, entry):
         f = self.e.farming
@@ -637,11 +983,11 @@ class Agency:
         return (True, 'en_route') if p.id in f.journeys else (False, 'unreachable')
     def _do_haul(self, p, a, entry):
         f = self.e.farming; pid = p.id
-        src, dst, limit = a.get('from'), a.get('to'), a.get('limit')
-        if type(src) is not str or type(dst) is not str or (limit is not None and (type(limit) is not int or limit < 0)):
+        src, dst, limit, item = a.get('from'), a.get('to'), a.get('limit'), a.get('item')
+        if type(src) is not str or type(dst) is not str or (limit is not None and (type(limit) is not int or limit < 0)) or (item is not None and (type(item) is not str or item not in entry['items'])):
             return False, 'invalid_args'
         owner = a.get('owner', f'h:{p.household_id}' if p.household_id is not None else f'p:{pid}')
-        moved = f.move_food(pid, src, dst, owner, limit)
+        moved = f.move_food(pid, src, dst, owner, limit, item=item)
         return (moved > 0), (None if moved else 'nothing_moved')
     def _do_give(self, p, a, entry):
         e = self.e; rid, kg = a.get('recipient'), a.get('kg')
@@ -687,8 +1033,12 @@ class Agency:
         room = int(e.cfg['people']['carry_cap'] - e.inventory.weight(f'p:{p.id}'))   # kg the hunter can physically carry home
         carried = max(0, min(killed, room))
         if carried > 0:
+            # A household member's catch is household-owned from creation. It remains
+            # in the hunter's physical custody until hauled, but can lawfully move to
+            # that household's establishment under the same custody rules as grain.
+            owner = f'h:{p.household_id}' if p.household_id is not None else f'p:{p.id}'
             e.inventory.create(e.day, e.cfg['agency']['hunt_item'], int(round(carried * 1000 / e.cfg['units']['food_unit_g'])),
-                               f'p:{p.id}', f'p:{p.id}', source='production', process='hunt')
+                               f'p:{p.id}', owner, source='production', process='hunt')
         e.ledger.event(e.day, 'hunt', [p.id], cell=p.cell, place=p.place, visibility='public' if killed else 'private',
                        target=target, killed_kg=killed, carried_kg=carried)
         return True, (None if killed else 'no_kill')

@@ -20,8 +20,95 @@ from chronicle.engine import Engine
 from chronicle import setup
 from chronicle.attention import Attention, run_day, replay_days
 from chronicle.llm import OllamaClient, LLMPolicy, LLMError, client_from_config
-from chronicle.agency import ReplayPolicy
+from chronicle.agency import ReplayPolicy, EstablishmentPolicy
 from chronicle.frames import FrameWriter, ContextTap
+
+
+def _nearest(origin, places, e):
+    import numpy as np
+    return min(places, key=lambda bid: (int(e.world.hex_distance(np.array([origin]), np.array([e.places[bid].cell]))[0]), bid)) if places else None
+
+
+def bind_establishment_economy(e):
+    """Bind the first closed local chain: hunter -> butcher -> restaurant -> diner."""
+    staff = {row.place: row.worker for row in e.employment.staffing.values()}
+    places_by_kind = {}
+    for bid, b in e.places.items():
+        if b.destroyed_day is None: places_by_kind.setdefault(b.kind, []).append(bid)
+    for rows in places_by_kind.values(): rows.sort()
+    roles = e.cfg.catalog['roles']
+    foods = tuple(sorted(item for item, spec in e.cfg.catalog['items'].items() if spec['kind'] == 'food'))
+    travel_reserve = min(int(e.cfg.derived['consumption_units_per_day'] * 12), int(e.cfg['people']['carry_cap'] / max(e.cfg.item('grain')['weight'], 1e-12)))
+    for pid, person in sorted(e.people.rows.items()):
+        role = roles.get(person.role or '')
+        if role is None or not role['produces']: continue
+        place = next((s.place for s in e.employment.staffing.values() if s.worker == pid), None)
+        if place is None: continue
+        spec = e.cfg.building(e.places[place].kind); products = tuple(role['produces'])
+        if spec.get('extracts') or 'meat' in products:
+            e.agency.bind(pid, EstablishmentPolicy('producer', establishment=place, products=products, provisions=foods, provision_reserve=travel_reserve))
+    hunters, butchers, restaurants = places_by_kind.get('hunters_cabin', []), places_by_kind.get('butcher_shop', []), places_by_kind.get('restaurant', [])
+    for shop in butchers:
+        pid=staff.get(shop); source=_nearest(e.places[shop].cell,hunters,e)
+        if pid is not None and source is not None: e.agency.bind(pid, EstablishmentPolicy('operator', wage=1, establishment=shop, stock_targets={'meat':10}, suppliers=((source,'meat',10),), provisions=foods, provision_reserve=travel_reserve, visit_period=7))
+    for shop in restaurants:
+        pid=staff.get(shop); source=_nearest(e.places[shop].cell,butchers,e)
+        if pid is not None and source is not None: e.agency.bind(pid, EstablishmentPolicy('operator', wage=1, establishment=shop, stock_targets={'butchered_meat':9}, upstream_orders=((source,'butcher_portion',1),), provisions=foods, provision_reserve=travel_reserve, visit_period=7))
+    merchants=[p.id for p in e.people.rows.values() if p.alive and p.role=='merchant']; claimed=set()
+    for shop in restaurants:
+        candidate=next((pid for pid in merchants if pid not in claimed),None)
+        if candidate is None: break
+        claimed.add(candidate); e.agency.bind(candidate, EstablishmentPolicy('customer', recipes=('restaurant_meal',), price=1, establishment=shop, provisions=foods, provision_reserve=travel_reserve, visit_period=7))
+
+
+def bind_primary_producers(e):
+    bind_establishment_economy(e)
+
+
+def establishment_telemetry(e, day):
+    """Observational daily facts for the seeded local food chain.
+
+    This deliberately classifies durable ledger events and physical stock only.  It
+    does not infer a motive from a missing event: `idle` is reported as an observed
+    zero, never as a made-up reason a person did not act.
+    """
+    events = e.ledger.events_on(day)
+    places = {bid: b.kind for bid, b in e.places.items() if b.destroyed_day is None}
+    stocks = Counter()
+    for lot in e.inventory.lots.values():
+        if not lot.holder.startswith('b:'):
+            continue
+        try:
+            place = int(lot.holder[2:])
+        except ValueError:
+            continue
+        kind = places.get(place)
+        if kind in ('hunters_cabin', 'butcher_shop', 'restaurant'):
+            stocks[f'{kind}:{lot.item}'] += lot.qty
+    recipes = Counter()
+    transfers = Counter()
+    procurement = 0
+    for ev in events:
+        data = ev.payload
+        recipe = data.get('recipe')
+        if isinstance(recipe, str):
+            recipes[recipe] += 1
+        reason = data.get('reason')
+        if isinstance(reason, str):
+            transfers[reason] += 1
+            procurement += int(reason == 'establishment-procurement')
+    return {
+        'hunts': sum(ev.type == 'hunt' for ev in events),
+        'extract_started': sum(ev.type == 'project_started' and ev.payload.get('kind') == 'extract' for ev in events),
+        'extract_completed': sum(ev.type == 'project_completed' and ev.payload.get('kind') == 'extract' for ev in events),
+        'procurement_trades': procurement,
+        'contracts': sum(ev.type == 'contract' for ev in events),
+        'contracts_by_recipe': dict(sorted(recipes.items())),
+        'jobs_hired': sum(ev.type == 'hired' for ev in events),
+        'wages_paid': sum(ev.type == 'paid' for ev in events),
+        'work_order_pickups': transfers.get('work-order-pickup', 0),
+        'stock': dict(sorted(stocks.items())),
+    }
 
 
 def day_line(e, day):
@@ -30,6 +117,7 @@ def day_line(e, day):
     return {'day': day, 'alive': len(alive), 'dead': len(e.people.rows) - len(alive),
             'hungry': sum(1 for p in alive if p.needs['food'] < th),
             'events': dict(sorted(Counter(ev.type for ev in e.ledger.events_on(day)).items())),
+            'establishments': establishment_telemetry(e, day),
             'food_units': sum(l.qty for l in e.inventory.lots.values() if e.cfg.item(l.item)['kind'] == 'food'),
             'ecology': {k: v for k, v in e.cells.summary().items() if k in ('moisture_mean', 'burning', 'planted')}}
 
@@ -60,6 +148,7 @@ def main(argv=None):
         e = Engine(cfg); report = setup.generate(e)
         with open(os.path.join(a.out, 'setup.json'), 'w') as f: json.dump(report, f, indent=1, sort_keys=True)
         mode = 'generate'
+    bind_primary_producers(e)
     total = cfg.derived['total_days']
     days = a.days if a.days is not None else max(0, total - e.day)
     every = cfg['run']['checkpoint_every_ticks'] * cfg['run']['days_per_tick']

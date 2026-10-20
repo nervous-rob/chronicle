@@ -86,7 +86,7 @@ cluster_terrain_prefs = { plains = 3.0, forest = 1.0, hills = 1.0, water_adjacen
 age_dist = "premodern"        # premodern | young | flat
 family_seed = true
 household_size_dist = [0.10, 0.20, 0.25, 0.20, 0.15, 0.10]    # p(size = 1..6)
-roles_mix = { farmer = 0.7, crafter = 0.1, merchant = 0.05, priest = 0.05, soldier = 0.05, other = 0.05 }   # worldgen-v1: a head with a producing role gets its workplace; without a market, non-farm households live on their buffer only
+roles_mix = { farmer = 0.57, crafter = 0.06, merchant = 0.04, hunter = 0.035, butcher = 0.025, chef = 0.03, iron_miner = 0.025, coal_miner = 0.025, salt_miner = 0.025, quarrier = 0.025, smith = 0.025, priest = 0.035, soldier = 0.03, other = 0.05 }   # farm-majority with enough extractive/service operators for a 500-person seed; role workplaces are physically sited during setup
 food_ratio = { plains = 0.5, forest = 0.6, hills = 0.7, marsh = 0.8, desert = 0.9 }
 wealth_gini = 0.4
 food_buffer_months = 10       # seeded food per household at t0 (months of consumption). The run starts in spring; the first harvest is autumn (~day 182+), so < 7 starves everyone before it (worldgen-v1 finding)

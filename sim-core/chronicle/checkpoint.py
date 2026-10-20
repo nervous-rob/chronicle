@@ -26,11 +26,11 @@ from .inventory import Inventory, Holder, Lot
 from .people import People, Person
 from .farming import Farming, Farm, Journey, Household
 from .projects import Projects, Project
-from .employment import Employment, Job
+from .employment import Employment, Job, Staffing, WorkOrder
 from .engine import Engine, Place
 from .agency import Agency, LOG_FIELDS, ACTIONS, PLAN_FIELDS, BREAKS
 
-VERSION = 11  # exploration-v1: personal durable cell-knowledge snapshots.
+VERSION = 15  # data-driven extractive projects and fire-resistant stone construction.
 # VERSION 4   # contact-v1: memory records carry hops/from; tell events; [contact]/[gossip] wired
 # Bounds decoded checkpoint state and compressed archives.  The 500-person
 # resumable scale gate legitimately reaches beyond 128 MiB of complete causal
@@ -48,7 +48,7 @@ STATE = {
  'engine': 'places day reports last_check_day failed _in_step _completed_day deprivation'.split(),
  'agency': 'agents log day plans'.split(),
  'projects': 'projects next_id'.split(),
- 'employment': 'jobs next_id'.split(),
+ 'employment': 'jobs next_id work_orders next_order_id staffing vacancies'.split(),
  'world': 'w h n cell_km day_hours ys xs x_km y_km nbr terrain elevation slope river region water_adjacent river_adjacent road_level road_wear bridge ferry _hours_per_plains_cell region_seeds'.split(),
  'cells': 'land wl_ids wl_k moisture vegetation fuel rain_mm protection cleared burning burn_hour burn_scar_day burn_since_day edge_progress crop_id units_per_field fields planted crop_progress crop_health wildlife seir regions wet wind_dir wind_kph land_nbr deg last_fire_cells wl_initial budget'.split(),
  'ledger': 'kind_of events by_day _day_start _cur_day _f_res _f_from _f_to _f_qty _f_proc _f_day expected bucket_totals n_flows checks residuals'.split(),
@@ -64,7 +64,7 @@ REFS = {
  'inventory': 'cfg ledger'.split(), 'people': 'cfg inventory ledger rng'.split(), 'farming': ['e'], 'agency': ['e', 'policies'], 'projects': ['e'], 'employment': ['e'],
 }
 CLASSES={'engine':Engine,'world':World,'cells':Cells,'ledger':Ledger,'inventory':Inventory,'people':People,'farming':Farming,'agency':Agency,'projects':Projects,'employment':Employment}
-RECORDS={c.__name__:c for c in (Place,Event,Holder,Lot,Person,Farm,Journey,Household,Project,Job)}
+RECORDS={c.__name__:c for c in (Place,Event,Holder,Lot,Person,Farm,Journey,Household,Project,Job,Staffing,WorkOrder)}
 
 def canonical(x): return json.dumps(x,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
 def sha(b): return hashlib.sha256(b).hexdigest()
@@ -278,6 +278,7 @@ def validate(e):
         require(type(p.known_cells) is dict and all(type(c) is int and 0<=c<n and type(v) is dict and {'day','source'}<=set(v) and type(v['day']) is int and 0<=v['day']<e.day and type(v['source']) is str for c,v in p.known_cells.items()),'invalid personal map knowledge')
         require(p.last_day<e.day and (not p.alive or p.last_day==e.day-1),'person daily marker mismatch')
         require(all(type(k) is int and 0<=k<len(e.ledger.events) and type(m) is dict and set(m)=={'day','fidelity','source','hops','from'} and type(m['hops']) is int and m['hops']>=0 and (m['from'] is None or m['from'] in e.people.rows) and (m['hops']==0)==(m['from'] is None) for k,m in p.memory.items()),'invalid memory record')
+        require(type(p.aptitudes) is dict and all(type(k) is str and k and isinstance(v,float) and v>0 for k,v in p.aptitudes.items()),'invalid aptitudes')
         require(type(p.last_sleep_quality) is float and 0.<=p.last_sleep_quality<=1.,'invalid sleep quality')
         require(type(p.sleep_streaks) is dict and all(k in e.cfg['sleep']['consequences'] and type(v) is int and v>=0 for k,v in p.sleep_streaks.items()),'invalid sleep streaks')
     for i,ev in enumerate(e.ledger.events):
@@ -293,12 +294,17 @@ def validate(e):
     for lid,lot in e.inventory.lots.items():
         require(type(lot) is Lot,'invalid lot type')
         require(lot.origin_event is None or 0<=lot.origin_event<len(e.ledger.events),'missing provenance event')
+        require(lot.order_id is None or lot.order_id in e.employment.work_orders,'missing work-order reservation')
         require(all(entry.get('type')!='cite' or type(entry.get('event_id')) is int and 0<=entry['event_id']<len(e.ledger.events) for entry in lot.entries),'missing record citation')
     for k,h in e.inventory.holders.items():require(type(h) is Holder and h.key==k,'invalid holder identity')
-    for key,q in e.projects.projects.items(): require(type(q) is Project and key==q.id and q.owner and q.kind in ('clear','extract','build','repair') and 0<=q.cell<n and q.place in e.places,'invalid project')
+    for key,q in e.projects.projects.items(): require(type(q) is Project and key==q.id and q.owner and q.kind in ('clear','extract','build','repair') and 0<=q.cell<n and (q.kind!='extract' or (q.extract_item in e.cfg.catalog['items'] and q.extract_qty>0)) and q.place in e.places,'invalid project')
     require(type(e.projects.next_id) is int and e.projects.next_id>max(e.projects.projects,default=-1),'invalid project id counter')
-    for key,j in e.employment.jobs.items(): require(type(j) is Job and key==j.id and j.place in e.places and j.employer in e.people.rows and j.wage>0 and j.slots>0 and j.filled>=0,'invalid job')
+    for key,j in e.employment.jobs.items(): require(type(j) is Job and key==j.id and j.place in e.places and j.employer in e.people.rows and j.wage>0 and j.slots>0 and j.filled>=0 and j.activity in (None,'plant','harvest','project','order') and (j.activity=='project') == (j.project is not None) and (j.project is None or j.project in e.projects.projects) and (j.order is None or j.order in e.employment.work_orders),'invalid job')
     require(type(e.employment.next_id) is int and e.employment.next_id>max(e.employment.jobs,default=-1),'invalid employment id counter')
+    for key,q in e.employment.work_orders.items(): require(type(q) is WorkOrder and key==q.id and q.place in e.places and q.customer in e.people.rows and q.provider in e.people.rows and q.price>0 and q.due_day>=q.created_day and q.status in ('open','ready','complete') and ((q.recipe is None and ((q.status=='open' and q.project in e.projects.projects) or (q.status=='complete' and q.delivered_place in e.places))) or (q.recipe is not None and q.output in e.cfg.catalog['items'] and q.output_qty>0 and q.required_hours>0 and ((q.status=='open') or (q.status=='ready' and bool(q.output_lots)) or (q.status=='complete' and q.delivered_place in e.places)))),'invalid work order')
+    require(type(e.employment.next_order_id) is int and e.employment.next_order_id>max(e.employment.work_orders,default=-1),'invalid work order id counter')
+    for pid,row in e.employment.staffing.items(): require(type(row) is Staffing and pid==row.worker and pid in e.people.rows and row.place in e.places and row.role in e.cfg.catalog['roles'] and (row.employer is None or row.employer in e.people.rows),'invalid establishment staffing')
+    require(type(e.employment.vacancies) is dict and all(type(key) is tuple and len(key)==2 and key[0] in e.places and key[1] in e.cfg.catalog['roles'] and value is True for key,value in e.employment.vacancies.items()),'invalid establishment vacancies')
     for key,f in e.farming.farms.items():require(type(f) is Farm and key==f.place and all(i in e.places for i in (f.place,f.home,f.store)),'invalid farm')
     for pid,f in e.farming.assignments.items():require(pid in e.people.rows and f in e.farming.farms,'invalid farm assignment')
     for key,h in e.farming.households.items():require(type(h) is Household and key==h.home and all(i in e.places for i in (h.home,h.store)) and e.places[h.home].owner==h.owner,'invalid household')

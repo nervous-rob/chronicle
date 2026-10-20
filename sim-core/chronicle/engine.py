@@ -103,6 +103,7 @@ class Engine:
         # Partial structural damage and evacuation are deliberately still absent.
         for place in self.places.values():
             if place.destroyed_day is not None: continue
+            if float(self.cfg.building(place.kind).get('fire_resistance', 0.0)) >= 1.0: continue
             hour = float(self.cells.burn_hour[place.cell])
             duration = max(0., self.cfg['units']['day_hours'] - hour)
             if duration * self.cfg['fire']['building_damage_per_hour'] < 1.: continue
@@ -176,7 +177,7 @@ class Engine:
             if place is None or place.destroyed_day is not None or place.cell != p.cell:
                 continue
             foreign = [lot for lot in self.inventory.lots.values()
-                       if lot.holder == holder and lot.owner not in owners
+                       if lot.holder == holder and lot.owner not in owners and lot.order_id is None
                        and self.cfg.item(lot.item)['kind'] == 'food']
             if not foreign:
                 continue
@@ -481,6 +482,10 @@ class Engine:
                 candidates = [q for q in self.people.rows.values() if q.alive and q.household_id == p.household_id and q.home_place == p.home_place
                               and self.people.at_least(q, day, 'youth') and self.farming.households[home].owner in self.people.owners(q)]
                 if candidates: self.farming.keepers[min(candidates,key=lambda q:q.id).id] = home
+        # Establishments follow the same lifecycle rule: a dead operator leaves a
+        # concrete vacancy, then an eligible household successor may take it over.
+        self.employment.reconcile_staffing(day)
+
         # Estate transfer can change a farm's owner even when the deceased was not
         # its currently assigned worker. Reconcile every routine after the full
         # death batch so a prior household worker cannot labor for a new estate owner.
